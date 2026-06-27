@@ -11,6 +11,11 @@ let state = {
     searchQuery: '',
     favorites: new Set(),
     currentChannel: null,
+
+    // Custom Player Settings
+    dataSaverMode: false,
+    selectedQualityLevel: -1, // -1 means Auto
+    controlsTimeout: null,
     
     // Player instances
     hlsInstance: null,
@@ -47,6 +52,18 @@ const loadMoreArea = document.getElementById('load-more-area');
 const btnAllChannels = document.getElementById('btn-all-channels');
 const btnFavorites = document.getElementById('btn-favorites');
 const favCountEl = document.getElementById('fav-count');
+
+// Custom Player DOM Elements
+const videoWrapper = document.getElementById('video-wrapper');
+const ctrlPlayPause = document.getElementById('ctrl-play-pause');
+const ctrlVolume = document.getElementById('ctrl-volume');
+const ctrlVolumeSlider = document.getElementById('ctrl-volume-slider');
+const ctrlDataSaver = document.getElementById('ctrl-data-saver');
+const ctrlSettings = document.getElementById('ctrl-settings');
+const ctrlFullscreen = document.getElementById('ctrl-fullscreen');
+const playerSettingsPopup = document.getElementById('player-settings-popup');
+const qualityOptionsList = document.getElementById('quality-options-list');
+const centerPlayBtn = document.getElementById('center-play-btn');
 
 const API_BASE = ''; // Same host
 
@@ -423,7 +440,14 @@ function playChannel(channel) {
         playerOverlay.style.pointerEvents = 'auto';
     };
 
-    videoPlayer.onplaying = clearOverlay;
+    // Reset quality levels list UI
+    qualityOptionsList.innerHTML = '<button class="option-item active" data-level="-1">Auto</button>';
+
+    videoPlayer.onplaying = () => {
+        clearOverlay();
+        ctrlPlayPause.innerHTML = "<i class='bx bx-pause'></i>";
+    };
+    
     videoPlayer.onerror = (e) => handlePlayError(e);
 
     try {
@@ -440,7 +464,7 @@ function playChannel(channel) {
         else if (engine === 'MPEG-TS') {
             if (mpegts.getFeatureList().mseLivePlayback) {
                 state.mpegtsInstance = mpegts.createPlayer({
-                    type: 'mpegts', // Corrected type: 'mpegts' is the required type in mpegts.js
+                    type: 'mpegts',
                     url: playUrl,
                     isLive: true
                 });
@@ -458,13 +482,18 @@ function playChannel(channel) {
                 state.hlsInstance = new Hls({
                     enableWorker: true,
                     lowLatencyMode: true,
-                    // Try to avoid stalls
                     maxBufferLength: 8,
                     maxMaxBufferLength: 15
                 });
                 state.hlsInstance.loadSource(playUrl);
                 state.hlsInstance.attachMedia(videoPlayer);
                 state.hlsInstance.on(Hls.Events.MANIFEST_PARSED, () => {
+                    populateQualityLevels();
+                    if (state.dataSaverMode) {
+                        applyDataSaverQuality();
+                    } else if (state.selectedQualityLevel !== -1) {
+                        setHlsQuality(state.selectedQualityLevel);
+                    }
                     videoPlayer.play().catch(e => handlePlayError(e));
                 });
                 state.hlsInstance.on(Hls.Events.ERROR, (event, data) => {
@@ -573,3 +602,219 @@ function escapeHtml(str) {
         .replace(/"/g, '&quot;')
         .replace(/'/g, '&#039;');
 }
+
+/* =========================================================================
+   YOUTUBE TV CUSTOM PLAYER LOGIC
+   ========================================================================= */
+
+function initCustomPlayer() {
+    // 1. Play / Pause Control
+    const togglePlay = () => {
+        if (!state.currentChannel) return;
+        if (videoPlayer.paused) {
+            videoPlayer.play().catch(e => console.warn(e));
+            ctrlPlayPause.innerHTML = "<i class='bx bx-pause'></i>";
+            flashCenterBtn('play');
+        } else {
+            videoPlayer.pause();
+            ctrlPlayPause.innerHTML = "<i class='bx bx-play'></i>";
+            flashCenterBtn('pause');
+        }
+    };
+
+    ctrlPlayPause.addEventListener('click', togglePlay);
+    videoPlayer.addEventListener('click', togglePlay);
+
+    // Flash Play/Pause Center Indicator
+    const flashCenterBtn = (type) => {
+        centerPlayBtn.innerHTML = type === 'play' ? "<i class='bx bx-play'></i>" : "<i class='bx bx-pause'></i>";
+        centerPlayBtn.classList.remove('animate');
+        void centerPlayBtn.offsetWidth; // Force Reflow
+        centerPlayBtn.classList.add('animate');
+    };
+
+    // 2. Volume Controls
+    const updateVolume = (val) => {
+        videoPlayer.volume = val;
+        videoPlayer.muted = (val === 0);
+        ctrlVolumeSlider.value = val;
+        
+        if (val === 0 || videoPlayer.muted) {
+            ctrlVolume.innerHTML = "<i class='bx bx-volume-mute'></i>";
+        } else if (val < 0.5) {
+            ctrlVolume.innerHTML = "<i class='bx bx-volume-low'></i>";
+        } else {
+            ctrlVolume.innerHTML = "<i class='bx bx-volume-full'></i>";
+        }
+    };
+
+    ctrlVolumeSlider.addEventListener('input', (e) => {
+        updateVolume(parseFloat(e.target.value));
+    });
+
+    ctrlVolume.addEventListener('click', () => {
+        if (videoPlayer.muted) {
+            videoPlayer.muted = false;
+            updateVolume(videoPlayer.volume || 1);
+        } else {
+            videoPlayer.muted = true;
+            ctrlVolume.innerHTML = "<i class='bx bx-volume-mute'></i>";
+        }
+    });
+
+    // 3. Settings Gear Modal toggling
+    ctrlSettings.addEventListener('click', (e) => {
+        e.stopPropagation();
+        playerSettingsPopup.classList.toggle('active');
+    });
+
+    // Close settings gear when clicking anywhere else
+    document.addEventListener('click', () => {
+        playerSettingsPopup.classList.remove('active');
+    });
+
+    playerSettingsPopup.addEventListener('click', (e) => {
+        e.stopPropagation();
+    });
+
+    // 4. Data Saver Toggle
+    ctrlDataSaver.addEventListener('click', () => {
+        state.dataSaverMode = !state.dataSaverMode;
+        if (state.dataSaverMode) {
+            ctrlDataSaver.classList.add('active');
+            ctrlDataSaver.querySelector('.btn-label').textContent = "Data Saver On";
+            applyDataSaverQuality();
+        } else {
+            ctrlDataSaver.classList.remove('active');
+            ctrlDataSaver.querySelector('.btn-label').textContent = "Data Saver Off";
+            setHlsQuality(-1); // Revert to Auto
+        }
+    });
+
+    // 5. Fullscreen Toggle
+    const toggleFullscreen = () => {
+        if (!document.fullscreenElement) {
+            videoWrapper.requestFullscreen().catch(err => {
+                console.error(`Fullscreen request failed: ${err.message}`);
+            });
+            ctrlFullscreen.innerHTML = "<i class='bx bx-exit-fullscreen'></i>";
+        } else {
+            document.exitFullscreen();
+            ctrlFullscreen.innerHTML = "<i class='bx bx-fullscreen'></i>";
+        }
+    };
+
+    ctrlFullscreen.addEventListener('click', toggleFullscreen);
+    videoPlayer.addEventListener('dblclick', toggleFullscreen);
+
+    // 6. YouTube TV Auto-hide Controls UI on Inactivity
+    const showControls = () => {
+        videoWrapper.classList.add('show-controls');
+        videoWrapper.classList.remove('hide-cursor');
+        
+        if (state.controlsTimeout) clearTimeout(state.controlsTimeout);
+        
+        // Hide only if playing
+        if (!videoPlayer.paused) {
+            state.controlsTimeout = setTimeout(() => {
+                // If settings modal is open, don't auto-hide
+                if (playerSettingsPopup.classList.contains('active')) return;
+                
+                videoWrapper.classList.remove('show-controls');
+                videoWrapper.classList.add('hide-cursor');
+            }, 3000);
+        }
+    };
+
+    videoWrapper.addEventListener('mousemove', showControls);
+    videoPlayer.addEventListener('play', showControls);
+    videoPlayer.addEventListener('pause', () => {
+        videoWrapper.classList.add('show-controls');
+        videoWrapper.classList.remove('hide-cursor');
+        if (state.controlsTimeout) clearTimeout(state.controlsTimeout);
+    });
+
+    // 7. Keyboard Hotkeys (Space, M, F)
+    document.addEventListener('keydown', (e) => {
+        // Ignore hotkeys when inputting text in search boxes
+        if (document.activeElement.tagName === 'INPUT') return;
+
+        const key = e.key.toLowerCase();
+        if (key === ' ' || key === 'spacebar') {
+            e.preventDefault();
+            togglePlay();
+        } else if (key === 'm') {
+            e.preventDefault();
+            ctrlVolume.click();
+        } else if (key === 'f') {
+            e.preventDefault();
+            toggleFullscreen();
+        }
+    });
+}
+
+// Populate Quality Selection Dropdown dynamically
+function populateQualityLevels() {
+    qualityOptionsList.innerHTML = '';
+    
+    // Auto Option
+    const autoBtn = document.createElement('button');
+    autoBtn.className = `option-item ${state.selectedQualityLevel === -1 ? 'active' : ''}`;
+    autoBtn.textContent = 'Auto';
+    autoBtn.addEventListener('click', () => setHlsQuality(-1));
+    qualityOptionsList.appendChild(autoBtn);
+
+    if (state.hlsInstance && state.hlsInstance.levels.length > 0) {
+        state.hlsInstance.levels.forEach((level, idx) => {
+            const res = level.height ? `${level.height}p` : `Level ${idx}`;
+            const btn = document.createElement('button');
+            btn.className = `option-item ${state.selectedQualityLevel === idx ? 'active' : ''}`;
+            btn.textContent = res;
+            btn.addEventListener('click', () => setHlsQuality(idx));
+            qualityOptionsList.appendChild(btn);
+        });
+    }
+}
+
+// Switch Hls.js Quality Levels
+function setHlsQuality(levelIndex) {
+    state.selectedQualityLevel = levelIndex;
+    
+    if (state.hlsInstance) {
+        state.hlsInstance.currentLevel = levelIndex;
+    }
+    
+    // Update active dropdown item checkboxes
+    const items = qualityOptionsList.querySelectorAll('.option-item');
+    items.forEach((item, idx) => {
+        const targetIdx = idx - 1; // Subtract 1 for Auto
+        if (targetIdx === levelIndex) {
+            item.classList.add('active');
+        } else {
+            item.classList.remove('active');
+        }
+    });
+
+    playerSettingsPopup.classList.remove('active');
+}
+
+// Force the lowest quality level for Data Saver Mode
+function applyDataSaverQuality() {
+    if (state.hlsInstance && state.hlsInstance.levels.length > 0) {
+        let lowestIndex = 0;
+        let minHeight = 9999;
+        state.hlsInstance.levels.forEach((lvl, idx) => {
+            if (lvl.height && lvl.height < minHeight) {
+                minHeight = lvl.height;
+                lowestIndex = idx;
+            }
+        });
+        setHlsQuality(lowestIndex);
+    }
+}
+
+// Call custom player setup inside document ready
+document.addEventListener('DOMContentLoaded', () => {
+    initCustomPlayer();
+});
+

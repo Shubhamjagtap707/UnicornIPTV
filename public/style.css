@@ -387,7 +387,7 @@ body {
     position: relative;
     width: 100%;
     aspect-ratio: 16 / 9;
-    max-height: 480px;
+    max-height: 40vh;
     background: #000;
 }
 
@@ -860,3 +860,411 @@ body {
         padding: 16px;
     }
 }
+
+/* =========================================================================
+   YOUTUBE TV CUSTOM VIDEO PLAYER STYLES
+   ========================================================================= */
+
+.video-wrapper {
+    position: relative;
+    overflow: hidden;
+    background: #000;
+}
+
+/* Hide cursor when controls are hidden */
+.video-wrapper.hide-cursor {
+    cursor: none;
+}
+
+#video-player {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    display: block;
+}
+
+/* Center Play/Pause Flash Button */
+.center-play-btn {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%) scale(0.8);
+    width: 72px;
+    height: 72px;
+    background: rgba(0, 0, 0, 0.65);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    font-size: 36px;
+    opacity: 0;
+    pointer-events: none;
+    z-index: 10;
+    transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.center-play-btn.animate {
+    animation: center-flash-animation 0.7s forwards;
+}
+
+@keyframes center-flash-animation {
+    0% {
+        opacity: 0;
+        transform: translate(-50%, -50%) scale(0.6);
+    }
+    40% {
+        opacity: 1;
+        transform: translate(-50%, -50%) scale(1.1);
+    }
+    100% {
+        opacity: 0;
+        transform: translate(-50%, -50%) scale(1.3);
+    }
+}
+
+/* Custom Controls Container */
+.video-controls-container {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 12;
+    padding: 30px 24px 20px 24px;
+    pointer-events: auto;
+    opacity: 0;
+    transform: translateY(15px);
+    transition: opacity 0.3s ease, transform 0.3s ease;
+}
+
+/* Show controls on hover or when paused */
+.video-wrapper.show-controls .video-controls-container {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+.controls-gradient-bg {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 120px;
+    background: linear-gradient(to top, rgba(0, 0, 0, 0.85) 0%, rgba(0, 0, 0, 0.4) 60%, transparent 100%);
+    pointer-events: none;
+    z-index: -1;
+}
+
+/* Controls Layout */
+.controls-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.controls-left, .controls-right {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+
+/* Control Buttons */
+.control-btn {
+    background: transparent;
+    border: none;
+    outline: none;
+    color: rgba(255, 255, 255, 0.85);
+    font-size: 24px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    transition: all 0.25s ease;
+}
+
+.control-btn:hover {
+    color: #fff;
+    background: rgba(255, 255, 255, 0.1);
+    transform: scale(1.08);
+}
+
+/* Badged Buttons (Data Saver) */
+.control-btn.btn-badge {
+    border-radius: 30px;
+    width: auto;
+    padding: 0 16px;
+    gap: 8px;
+    font-size: 14px;
+    font-weight: 500;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.control-btn.btn-badge i {
+    font-size: 18px;
+}
+
+.control-btn.btn-badge.active {
+    background: var(--primary);
+    border-color: var(--primary);
+    color: #fff;
+    box-shadow: 0 0 10px rgba(14, 165, 233, 0.4);
+}
+
+/* Volume Slider */
+.volume-container {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.volume-slider {
+    width: 0;
+    height: 4px;
+    -webkit-appearance: none;
+    appearance: none;
+    background: rgba(255, 255, 255, 0.25);
+    border-radius: 2px;
+    outline: none;
+    cursor: pointer;
+    transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1), background 0.3s ease;
+}
+
+.volume-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: #fff;
+    cursor: pointer;
+    box-shadow: 0 0 4px rgba(0,0,0,0.5);
+    opacity: 0;
+    transition: opacity 0.2s ease;
+}
+
+.volume-container:hover .volume-slider,
+.volume-slider:active {
+    width: 80px;
+}
+
+.volume-container:hover .volume-slider::-webkit-slider-thumb {
+    opacity: 1;
+}
+
+.volume-slider::-moz-range-thumb {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: #fff;
+    cursor: pointer;
+    border: none;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+}
+
+.volume-container:hover .volume-slider::-moz-range-thumb {
+    opacity: 1;
+}
+
+/* LIVE Indicator Badge */
+.live-indicator {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-left: 12px;
+    padding: 4px 10px;
+    background: rgba(255, 71, 126, 0.12);
+    border: 1px solid rgba(255, 71, 126, 0.2);
+    border-radius: 6px;
+    pointer-events: none;
+}
+
+.live-dot {
+    width: 8px;
+    height: 8px;
+    background: var(--favorite);
+    border-radius: 50%;
+    animation: live-pulse-animation 1.5s infinite;
+}
+
+.live-text {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--favorite);
+    letter-spacing: 1px;
+    font-family: var(--font-heading);
+}
+
+@keyframes live-pulse-animation {
+    0% { transform: scale(0.9); opacity: 0.7; box-shadow: 0 0 0 0 rgba(255, 71, 126, 0.7); }
+    70% { transform: scale(1.1); opacity: 1; box-shadow: 0 0 0 6px rgba(255, 71, 126, 0); }
+    100% { transform: scale(0.9); opacity: 0.7; box-shadow: 0 0 0 0 rgba(255, 71, 126, 0); }
+}
+
+/* Quality Settings Menu Popup */
+.player-settings-popup {
+    position: absolute;
+    bottom: 75px;
+    right: 24px;
+    background: rgba(11, 13, 22, 0.95);
+    backdrop-filter: blur(14px) saturate(180%);
+    -webkit-backdrop-filter: blur(14px) saturate(180%);
+    border: 1px solid var(--border-glass-bright);
+    border-radius: var(--radius-md);
+    width: 210px;
+    z-index: 15;
+    opacity: 0;
+    pointer-events: none;
+    transform: translateY(10px) scale(0.95);
+    transition: opacity 0.25s ease, transform 0.25s ease;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6), 0 0 1px 1px rgba(255, 255, 255, 0.05) inset;
+    padding: 8px 0;
+}
+
+.player-settings-popup.active {
+    opacity: 1;
+    pointer-events: auto;
+    transform: translateY(0) scale(1);
+}
+
+.popup-title {
+    padding: 10px 16px 6px 16px;
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+    margin-bottom: 6px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.options-list {
+    max-height: 240px;
+    overflow-y: auto;
+}
+
+/* Custom Scrollbar for Settings */
+.options-list::-webkit-scrollbar {
+    width: 4px;
+}
+.options-list::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.15);
+    border-radius: 2px;
+}
+
+.option-item {
+    width: 100%;
+    background: transparent;
+    border: none;
+    outline: none;
+    padding: 10px 16px;
+    text-align: left;
+    color: rgba(255,255,255,0.75);
+    font-size: 13.5px;
+    font-weight: 500;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    transition: all 0.2s ease;
+}
+
+.option-item:hover {
+    background: rgba(255,255,255,0.06);
+    color: #fff;
+    padding-left: 20px;
+}
+
+.option-item.active {
+    color: var(--primary);
+    background: rgba(14, 165, 233, 0.08);
+}
+
+.option-item.active::after {
+    content: '\eb8e'; /* bx-check icon character */
+    font-family: 'boxicons';
+    font-size: 18px;
+    font-weight: normal;
+}
+
+/* =========================================================================
+   UI REFINEMENT OVERRIDES (PREMIUM LOOK)
+   ========================================================================= */
+
+/* Improved general card appearance */
+.channel-card {
+    background: rgba(20, 24, 40, 0.4);
+    border: 1px solid rgba(255, 255, 255, 0.04);
+    box-shadow: 0 4px 15px rgba(0,0,0,0.15);
+    transition: transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1), 
+                border-color 0.3s ease, 
+                box-shadow 0.3s ease;
+}
+
+.channel-card:hover {
+    transform: translateY(-4px) scale(1.02);
+    border-color: var(--border-glass-bright);
+    box-shadow: 0 8px 25px rgba(0,0,0,0.3), 
+                0 0 10px rgba(14, 165, 233, 0.15);
+    background: rgba(26, 31, 52, 0.65);
+}
+
+.channel-card.playing {
+    border-color: var(--primary);
+    box-shadow: 0 0 15px rgba(14, 165, 233, 0.25);
+    background: rgba(14, 165, 233, 0.05);
+}
+
+/* Premium Sidebar Menu items */
+.menu-item {
+    transition: all 0.25s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.menu-item:hover {
+    background: rgba(255, 255, 255, 0.03);
+    color: #fff;
+    transform: translateX(3px);
+}
+
+.menu-item.active {
+    box-shadow: 0 0 12px rgba(14, 165, 233, 0.15);
+}
+
+/* Categories List buttons */
+.category-btn {
+    border: 1px solid rgba(255, 255, 255, 0.03);
+    background: rgba(255, 255, 255, 0.02);
+    transition: all 0.25s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.category-btn:hover {
+    background: rgba(255, 255, 255, 0.06);
+    color: #fff;
+    border-color: rgba(255, 255, 255, 0.1);
+    transform: translateX(4px);
+}
+
+.category-btn.active {
+    background: linear-gradient(135deg, var(--primary) 0%, rgba(139, 92, 246, 0.4) 100%);
+    box-shadow: 0 4px 15px rgba(14, 165, 233, 0.2);
+}
+
+/* App Header search bar refinement */
+.search-bar-container {
+    background: rgba(15, 18, 30, 0.6);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    box-shadow: 0 2px 10px rgba(0,0,0,0.1) inset;
+    transition: border-color 0.25s ease, box-shadow 0.25s ease;
+}
+
+.search-bar-container:focus-within {
+    border-color: var(--primary);
+    box-shadow: 0 0 10px rgba(14, 165, 233, 0.2), 0 2px 10px rgba(0,0,0,0.1) inset;
+}
+

@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -9,12 +10,15 @@
     <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link
+        href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap"
+        rel="stylesheet">
     <!-- Boxicons for icons -->
     <link href="https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css" rel="stylesheet">
     <!-- Stylesheet -->
     <link rel="stylesheet" href="style.css">
 </head>
+
 <body>
     <div class="app-container">
         <!-- Sidebar Navigation -->
@@ -25,7 +29,7 @@
                     <span class="logo-text">Unicorn <span class="logo-highlight">TV</span></span>
                 </div>
             </div>
-            
+
             <div class="category-search-box">
                 <i class='bx bx-search search-icon'></i>
                 <input type="text" id="group-search" placeholder="Search categories...">
@@ -73,8 +77,56 @@
             <!-- Video Player Dashboard -->
             <section class="player-dashboard">
                 <div class="player-container">
-                    <div class="video-wrapper">
-                        <video id="video-player" playsinline autoplay controls></video>
+                    <div class="video-wrapper" id="video-wrapper">
+                        <video id="video-player" playsinline autoplay></video>
+                        
+                        <!-- Center Play/Pause Flash Overlay -->
+                        <div class="center-play-btn" id="center-play-btn">
+                            <i class='bx bx-play'></i>
+                        </div>
+
+                        <!-- Custom Controls Overlay -->
+                        <div class="video-controls-container" id="video-controls-container">
+                            <div class="controls-gradient-bg"></div>
+                            <div class="controls-row">
+                                <div class="controls-left">
+                                    <button class="control-btn" id="ctrl-play-pause" title="Play/Pause (Space)">
+                                        <i class='bx bx-play'></i>
+                                    </button>
+                                    <div class="volume-container">
+                                        <button class="control-btn" id="ctrl-volume" title="Mute/Unmute (M)">
+                                            <i class='bx bx-volume-full'></i>
+                                        </button>
+                                        <input type="range" class="volume-slider" id="ctrl-volume-slider" min="0" max="1" step="0.05" value="1">
+                                    </div>
+                                    <div class="live-indicator">
+                                        <span class="live-dot"></span>
+                                        <span class="live-text">LIVE</span>
+                                    </div>
+                                </div>
+                                <div class="controls-right">
+                                    <button class="control-btn btn-badge" id="ctrl-data-saver" title="Data Saver Mode">
+                                        <i class='bx bx-shield-quarter'></i>
+                                        <span class="btn-label">Data Saver Off</span>
+                                    </button>
+                                    <button class="control-btn" id="ctrl-settings" title="Quality Settings">
+                                        <i class='bx bx-cog'></i>
+                                    </button>
+                                    <button class="control-btn" id="ctrl-fullscreen" title="Fullscreen (F)">
+                                        <i class='bx bx-fullscreen'></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Quality Settings Menu Popup -->
+                        <div class="player-settings-popup" id="player-settings-popup">
+                            <div class="popup-title"><i class='bx bx-cog'></i> Stream Quality</div>
+                            <div class="options-list" id="quality-options-list">
+                                <button class="option-item active" data-level="-1">Auto</button>
+                            </div>
+                        </div>
+
                         <div class="player-overlay" id="player-overlay">
                             <div class="loader" id="player-loader">
                                 <div class="spinner"></div>
@@ -83,7 +135,8 @@
                             <div class="player-error" id="player-error">
                                 <i class='bx bx-error-circle error-icon'></i>
                                 <span class="error-title">Stream Playback Failed</span>
-                                <span class="error-msg" id="player-error-msg">The stream format is unsupported or offline.</span>
+                                <span class="error-msg" id="player-error-msg">The stream format is unsupported or
+                                    offline.</span>
                                 <button class="retry-btn" id="player-retry"><i class='bx bx-refresh'></i> Retry</button>
                             </div>
                             <div class="player-welcome" id="player-welcome">
@@ -117,7 +170,7 @@
                     <h2 class="section-title" id="active-category-title">All Channels</h2>
                     <span class="results-count" id="results-count">Showing 0 channels</span>
                 </div>
-                
+
                 <div class="channel-grid" id="channel-grid-container">
                     <!-- Skeleton Cards -->
                     <div class="skeleton-card"></div>
@@ -147,8 +200,9 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/dashjs/4.7.4/dash.all.min.js"></script>
     <!-- Mpegts.js for .ts -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/mpegts.js/1.7.3/mpegts.min.js"></script>
-    
+
     <!-- Application Logic -->
     <script src="app.js"></script>
 </body>
+
 </html>
