@@ -1,0 +1,210 @@
+export async function onRequest(context) {
+  const { request } = context;
+
+  // Handle preflight OPTIONS requests
+  if (request.method === 'OPTIONS') {
+    return new Response(null, {
+      headers: {
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Headers': '*',
+        'Access-Control-Allow-Methods': 'GET, HEAD, OPTIONS',
+        'Access-Control-Max-Age': '86400'
+      }
+    });
+  }
+
+  const currentUrl = new URL(request.url);
+
+  // Extract the raw target URL parameter, preserving internal parameters
+  const urlPrefix = '/proxy?url=';
+  const urlIndex = request.url.indexOf(urlPrefix);
+  let targetUrl = '';
+
+  if (urlIndex !== -1) {
+    targetUrl = decodeURIComponent(request.url.slice(urlIndex + urlPrefix.length));
+  } else {
+    targetUrl = currentUrl.searchParams.get('url');
+  }
+
+  if (!targetUrl) {
+    return new Response('Missing url parameter', { status: 400 });
+  }
+
+  // Parse header parameters specified with pipe notation (e.g., URL|User-Agent=...&Referer=...)
+  let actualTargetUrl = targetUrl;
+  const customHeaders = {};
+  let pipeString = '';
+
+  const pipeIndex = targetUrl.indexOf('|');
+  if (pipeIndex !== -1) {
+    actualTargetUrl = targetUrl.slice(0, pipeIndex);
+    pipeString = targetUrl.slice(pipeIndex);
+    try {
+      const headerParams = new URLSearchParams(targetUrl.slice(pipeIndex + 1));
+      for (const [key, value] of headerParams.entries()) {
+        customHeaders[key] = value;
+      }
+    } catch (e) {
+      console.warn('Failed to parse pipe headers:', targetUrl.slice(pipeIndex + 1));
+    }
+  }
+
+  // Merge headers mimicking typical browser requests
+  const headers = new Headers({
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+    'Referer': actualTargetUrl
+  });
+
+  for (const [key, value] of Object.entries(customHeaders)) {
+    headers.set(key, value);
+  }
+
+  // Spoof User-Agent for MPEG-TS segments to bypass Restreamer firewalls
+  if (actualTargetUrl.toLowerCase().includes('.ts') && !customHeaders['User-Agent']) {
+    headers.set('User-Agent', 'VLC/3.0.18 LibVLC/3.0.18');
+  }
+
+  const range = request.headers.get('range');
+  if (range) {
+    headers.set('Range', range);
+  }
+
+  try {
+    const response = await fetch(actualTargetUrl, { headers });
+
+    // Copy original response headers and enforce CORS
+    const newHeaders = new Headers(response.headers);
+    newHeaders.set('Access-Control-Allow-Origin', '*');
+    newHeaders.set('Access-Control-Allow-Headers', '*');
+    newHeaders.set('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS');
+
+    const contentType = response.headers.get('content-type') || '';
+    const finalResponseUrl = response.url || actualTargetUrl;
+    const lowerUrl = actualTargetUrl.toLowerCase();
+    const isM3U8 = contentType.includes('mpegurl') ||
+                   contentType.includes('mpegURL') ||
+                   lowerUrl.includes('.m3u8') ||
+                   lowerUrl.includes('.php') ||
+                   lowerUrl.includes('/m3u/');
+
+    // If HLS Playlist, parse and rewrite all absolute/relative URLs
+    if (isM3U8 && !lowerUrl.includes('.ts')) {
+      const text = await response.text();
+
+      if (text.startsWith('#EXTM3U') || text.includes('#EXT-X-')) {
+        const lines = text.split(/\r?\n/);
+        const proxyUrlBase = `${currentUrl.protocol}//${currentUrl.host}/proxy?url=`;
+
+        const rewrittenLines = lines.map(line => {
+          const trimmed = line.trim();
+          if (trimmed === '') return line;
+
+          if (trimmed.startsWith('#')) {
+            if (trimmed.includes('URI=')) {
+              return line.replace(/URI="([^"]+)"/g, (match, uri) => {
+                let absoluteUri = uri;
+                try {
+                  if (!uri.startsWith('http://') && !uri.startsWith('https://')) {
+                    absoluteUri = new URL(uri, finalResponseUrl).href;
+                  }
+                } catch (e) {}
+                return `URI="${proxyUrlBase}${encodeURIComponent(absoluteUri + pipeString)}"`;
+              });
+            }
+            return line;
+          }
+
+          let absoluteUrl = trimmed;
+          try {
+            if (!trimmed.startsWith('http://') && !trimmed.startsWith('https://')) {
+              absoluteUrl = new URL(trimmed, finalResponseUrl).href;
+            }
+          } catch (e) {}
+          return proxyUrlBase + encodeURIComponent(absoluteUrl + pipeString);
+        });
+
+        return new Response(rewrittenLines.join('\n'), {
+          status: response.status,
+          headers: newHeaders
+        });
+      } else {
+        return new Response(text, {
+          status: response.status,
+          headers: newHeaders
+        });
+      }
+    }
+    // If DASH MPD XML, parse and rewrite all elements
+    else if (contentType.includes('dash+xml') || lowerUrl.includes('.mpd') || lowerUrl.includes('mpd.php')) {
+      const text = await response.text();
+      const proxyUrlBase = `${currentUrl.protocol}//${currentUrl.host}/proxy?url=`;
+
+      let xmlBaseUrl = finalResponseUrl;
+      const baseUrlMatch = text.match(/<BaseURL([^>]*)>([^<]+)<\/BaseURL>/i);
+      if (baseUrlMatch) {
+        const relBase = baseUrlMatch[2].trim();
+        try {
+          const baseUrlObj = new URL(finalResponseUrl);
+          const resolvedUrlObj = new URL(relBase, finalResponseUrl);
+          if (baseUrlObj.search && !resolvedUrlObj.search) {
+            resolvedUrlObj.search = baseUrlObj.search;
+          }
+          xmlBaseUrl = resolvedUrlObj.href;
+        } catch (e) {}
+      }
+
+      let rewritten = text.replace(/(href|media|initialization|url|uri)="([^"]+)"/gi, (match, attr, val) => {
+        const trimmedVal = val.trim();
+        if (trimmedVal === '' || trimmedVal.startsWith('#')) return match;
+
+        let absoluteUrl = trimmedVal;
+        try {
+          if (!trimmedVal.startsWith('http://') && !trimmedVal.startsWith('https://')) {
+            const xmlBaseObj = new URL(xmlBaseUrl);
+            const resolvedObj = new URL(trimmedVal, xmlBaseUrl);
+            if (xmlBaseObj.search && !resolvedObj.search) {
+              resolvedObj.search = xmlBaseObj.search;
+            }
+            absoluteUrl = resolvedObj.href;
+          }
+        } catch (e) {
+          return match;
+        }
+
+        return `${attr}="${proxyUrlBase}${encodeURIComponent(absoluteUrl + pipeString)}"`;
+      });
+
+      rewritten = rewritten.replace(/<Location([^>]*)>([^<]+)<\/Location>/g, (match, attrs, url) => {
+        const trimmedUrl = url.trim();
+        let absoluteUrl = trimmedUrl;
+        try {
+          if (!trimmedUrl.startsWith('http://') && !trimmedUrl.startsWith('https://')) {
+            const xmlBaseObj = new URL(xmlBaseUrl);
+            const resolvedObj = new URL(trimmedUrl, xmlBaseUrl);
+            if (xmlBaseObj.search && !resolvedObj.search) {
+              resolvedObj.search = xmlBaseObj.search;
+            }
+            absoluteUrl = resolvedObj.href;
+          }
+        } catch (e) {}
+        return `<Location${attrs}>${proxyUrlBase}${encodeURIComponent(absoluteUrl + pipeString)}<\/Location>`;
+      });
+
+      rewritten = rewritten.replace(/<BaseURL[^>]*>[^<]+<\/BaseURL>/gi, '');
+
+      return new Response(rewritten, {
+        status: response.status,
+        headers: newHeaders
+      });
+    }
+    // Default binary streaming (e.g. .ts, audio, or video segments)
+    else {
+      return new Response(response.body, {
+        status: response.status,
+        headers: newHeaders
+      });
+    }
+  } catch (err) {
+    return new Response('Proxy error: ' + err.message, { status: 500 });
+  }
+}
