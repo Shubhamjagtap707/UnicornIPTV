@@ -1405,163 +1405,37 @@ body {
 }
 
 /* =========================================================================
-   IPTV 10-FOOT TV MODE UI LAYOUT
+   NATIVE BROWSER FULLSCREEN CUSTOM OVERLAYS
    ========================================================================= */
 
-body.tv-mode {
-    overflow: hidden;
+.video-wrapper:fullscreen .video-controls-container {
+    bottom: 20px;
+    padding: 30px 40px;
+    z-index: 2147483647;
 }
 
-/* Restructure panels to overlays */
-body.tv-mode .main-header {
-    display: none !important;
+.video-wrapper:fullscreen .player-settings-popup {
+    bottom: 90px;
+    right: 40px;
+    z-index: 2147483647;
 }
 
-body.tv-mode .player-dashboard {
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100vw;
-    height: 100vh;
-    padding: 0 !important;
-    z-index: 5;
-    background: #000;
+.video-wrapper:fullscreen .center-play-btn {
+    z-index: 2147483647;
 }
 
-body.tv-mode .player-container {
-    width: 100vw;
-    height: 100vh;
-    border: none;
-    border-radius: 0;
-    box-shadow: none;
-    background: #000;
+/* Chrome/Safari native fullscreen adjustments */
+.video-wrapper:-webkit-full-screen .video-controls-container {
+    bottom: 20px;
+    padding: 30px 40px;
+    z-index: 2147483647;
 }
 
-body.tv-mode .video-wrapper {
-    width: 100vw;
-    height: 100vh;
-    max-height: none !important;
-    aspect-ratio: auto !important;
+.video-wrapper:-webkit-full-screen .player-settings-popup {
+    bottom: 90px;
+    right: 40px;
+    z-index: 2147483647;
 }
 
-body.tv-mode #video-player {
-    width: 100vw;
-    height: 100vh;
-    object-fit: contain; /* Kept contain to preserve channel aspect ratios */
-}
-
-/* Overlay Sidebar: Slides in from Left */
-body.tv-mode .sidebar {
-    position: absolute;
-    top: 0;
-    left: 0;
-    height: 100vh;
-    width: 320px;
-    z-index: 100;
-    background: rgba(8, 10, 16, 0.97);
-    backdrop-filter: blur(25px);
-    -webkit-backdrop-filter: blur(25px);
-    border-right: 1px solid var(--border-glass-bright);
-    box-shadow: none;
-    transform: translateX(-100%);
-    transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
-}
-
-body.tv-mode .sidebar.tv-menu-visible {
-    transform: translateX(0);
-    box-shadow: 15px 0 40px rgba(0, 0, 0, 0.8);
-}
-
-/* Overlay Channels List: Slides in from Right */
-body.tv-mode .channels-section {
-    position: absolute;
-    top: 0;
-    right: 0;
-    height: 100vh;
-    width: 440px;
-    z-index: 100;
-    background: rgba(8, 10, 16, 0.97);
-    backdrop-filter: blur(25px);
-    -webkit-backdrop-filter: blur(25px);
-    border-left: 1px solid var(--border-glass-bright);
-    box-shadow: none;
-    transform: translateX(100%);
-    transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
-    padding: 30px 24px;
-}
-
-body.tv-mode .channels-section.tv-grid-visible {
-    transform: translateX(0);
-    box-shadow: -15px 0 40px rgba(0, 0, 0, 0.8);
-}
-
-body.tv-mode .channel-grid {
-    grid-template-columns: 1fr; /* Single column list for TV remote navigation */
-    overflow-y: auto;
-    flex-grow: 1;
-    padding-right: 4px;
-}
-
-/* Overlay Info Panel: Slides up at bottom */
-body.tv-mode .stream-info-panel {
-    position: absolute;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    z-index: 90;
-    background: linear-gradient(to top, rgba(0, 0, 0, 0.95) 0%, rgba(0, 0, 0, 0.6) 60%, transparent 100%);
-    border-top: none;
-    padding: 40px 32px 30px 32px;
-    transform: translateY(100%);
-    transition: transform 0.3s ease;
-    pointer-events: none;
-}
-
-body.tv-mode .stream-info-panel.visible {
-    transform: translateY(0);
-}
-
-body.tv-mode .stream-info-panel * {
-    pointer-events: auto;
-}
-
-/* Overlay Control Bar position adjustment */
-body.tv-mode .video-controls-container {
-    bottom: 110px;
-}
-
-/* Custom indicator to show how to open TV Menu */
-.tv-menu-hint {
-    display: none;
-    position: absolute;
-    top: 24px;
-    left: 24px;
-    z-index: 50;
-    background: rgba(0, 0, 0, 0.6);
-    border: 1px solid rgba(255, 255, 255, 0.15);
-    border-radius: 30px;
-    padding: 6px 14px;
-    align-items: center;
-    gap: 8px;
-    color: rgba(255, 255, 255, 0.8);
-    font-size: 11.5px;
-    font-weight: 500;
-    pointer-events: none;
-    backdrop-filter: blur(10px);
-}
-
-body.tv-mode .tv-menu-hint {
-    display: flex;
-}
-
-.tv-key-badge {
-    background: rgba(255, 255, 255, 0.15);
-    border-radius: 4px;
-    padding: 1px 6px;
-    font-size: 10px;
-    font-family: monospace;
-    font-weight: 700;
-    border: 1px solid rgba(255,255,255,0.2);
-}
 
 
