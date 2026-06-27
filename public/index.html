@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GOD IPTV - Premium Streaming Player</title>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Boxicons for icons -->
+    <link href="https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css" rel="stylesheet">
+    <!-- Stylesheet -->
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Sidebar Navigation -->
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <div class="logo-area">
+                    <i class='bx bx-play-circle logo-icon'></i>
+                    <span class="logo-text">GOD <span class="logo-highlight">IPTV</span></span>
+                </div>
+            </div>
+            
+            <div class="category-search-box">
+                <i class='bx bx-search search-icon'></i>
+                <input type="text" id="group-search" placeholder="Search categories...">
+            </div>
+
+            <div class="sidebar-menu">
+                <button class="menu-item active" id="btn-all-channels" data-type="all">
+                    <i class='bx bx-grid-alt'></i>
+                    <span>All Channels</span>
+                </button>
+                <button class="menu-item" id="btn-favorites" data-type="favorites">
+                    <i class='bx bxs-heart favorite-color'></i>
+                    <span>Favorites</span>
+                    <span class="badge" id="fav-count">0</span>
+                </button>
+            </div>
+
+            <div class="category-list-container">
+                <h3 class="category-header">Categories</h3>
+                <div class="category-list" id="categories-container">
+                    <div class="skeleton-category"></div>
+                    <div class="skeleton-category"></div>
+                    <div class="skeleton-category"></div>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Main Content Area -->
+        <main class="main-content">
+            <!-- Header -->
+            <header class="main-header">
+                <div class="search-bar-container">
+                    <i class='bx bx-search search-bar-icon'></i>
+                    <input type="text" id="channel-search" placeholder="Search by channel name, tvgName, or group...">
+                    <button class="search-clear-btn" id="search-clear"><i class='bx bx-x'></i></button>
+                </div>
+                <div class="header-status">
+                    <div class="status-item">
+                        <span class="status-label">Total Channels:</span>
+                        <span class="status-value" id="total-channel-count">0</span>
+                    </div>
+                </div>
+            </header>
+
+            <!-- Video Player Dashboard -->
+            <section class="player-dashboard">
+                <div class="player-container">
+                    <div class="video-wrapper">
+                        <video id="video-player" playsinline autoplay controls></video>
+                        <div class="player-overlay" id="player-overlay">
+                            <div class="loader" id="player-loader">
+                                <div class="spinner"></div>
+                                <span class="loader-text">Initializing stream...</span>
+                            </div>
+                            <div class="player-error" id="player-error">
+                                <i class='bx bx-error-circle error-icon'></i>
+                                <span class="error-title">Stream Playback Failed</span>
+                                <span class="error-msg" id="player-error-msg">The stream format is unsupported or offline.</span>
+                                <button class="retry-btn" id="player-retry"><i class='bx bx-refresh'></i> Retry</button>
+                            </div>
+                            <div class="player-welcome" id="player-welcome">
+                                <i class='bx bx-tv welcome-icon'></i>
+                                <span class="welcome-title">Select a Channel to Watch</span>
+                                <span class="welcome-subtitle">Choose from over 6,800 live television streams</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="stream-info-panel" id="stream-info">
+                        <div class="stream-meta">
+                            <h2 class="now-playing-title" id="now-playing-title">No Channel Selected</h2>
+                            <div class="now-playing-details">
+                                <span class="badge badge-group" id="now-playing-group">N/A</span>
+                                <span class="badge badge-engine" id="now-playing-engine">N/A</span>
+                                <span class="stream-stat" id="now-playing-url">Select a channel</span>
+                            </div>
+                        </div>
+                        <div class="stream-actions">
+                            <button class="action-btn fav-toggle-btn" id="now-playing-fav-btn" title="Add to Favorites">
+                                <i class='bx bx-heart'></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Channel Grid Listing -->
+            <section class="channels-section">
+                <div class="section-title-bar">
+                    <h2 class="section-title" id="active-category-title">All Channels</h2>
+                    <span class="results-count" id="results-count">Showing 0 channels</span>
+                </div>
+                
+                <div class="channel-grid" id="channel-grid-container">
+                    <!-- Skeleton Cards -->
+                    <div class="skeleton-card"></div>
+                    <div class="skeleton-card"></div>
+                    <div class="skeleton-card"></div>
+                    <div class="skeleton-card"></div>
+                    <div class="skeleton-card"></div>
+                    <div class="skeleton-card"></div>
+                    <div class="skeleton-card"></div>
+                    <div class="skeleton-card"></div>
+                </div>
+
+                <div class="load-more-container" id="load-more-area">
+                    <button class="load-more-btn" id="load-more-btn">
+                        <span>Load More Channels</span>
+                        <i class='bx bx-chevron-down'></i>
+                    </button>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- Media Players CDN Scripts -->
+    <!-- Hls.js for .m3u8 and .php -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/hls.js/1.5.8/hls.min.js"></script>
+    <!-- Dash.js for .mpd -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/dashjs/4.7.4/dash.all.min.js"></script>
+    <!-- Mpegts.js for .ts -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/mpegts.js/1.7.3/mpegts.min.js"></script>
+    
+    <!-- Application Logic -->
+    <script src="app.js"></script>
+</body>
+</html>

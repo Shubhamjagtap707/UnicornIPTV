@@ -1,0 +1,14 @@
+{
+  "name": "god-tv-iptv-player",
+  "version": "1.0.0",
+  "description": "Premium IPTV Web Player for .m3u8, .mpd, .php, and .ts streams",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.21.2"
+  },
+  "author": "",
+  "license": "ISC"
+}
