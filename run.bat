@@ -1,7 +1,7 @@
 @echo off
-title GOD IPTV Player Control Panel
+title Unicorn TV Control Panel
 echo =====================================================================
-echo                     GOD IPTV STREAMING PLAYER
+echo                     UNICORN TV STREAMING PLAYER
 echo =====================================================================
 echo.
 echo [1/3] Checking Node.js dependencies...
@@ -12,7 +12,7 @@ if not exist node_modules (
     echo Dependencies are already installed.
 )
 echo.
-echo [2/3] Opening GOD IPTV Player in your default browser...
+echo [2/3] Opening Unicorn TV in your default browser...
 start http://localhost:3000
 echo.
 echo [3/3] Starting Express stream delivery server...
