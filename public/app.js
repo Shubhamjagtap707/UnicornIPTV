@@ -16,13 +16,6 @@ let state = {
     dataSaverMode: false,
     selectedQualityLevel: -1, // -1 means Auto
     controlsTimeout: null,
-    
-    // TV Mode and Spatial Navigation State
-    tvModeActive: false,
-    tvSidebarOpen: false,
-    tvChannelsOpen: false,
-    tvFocusedZone: 'channels', // 'menu', 'categories', 'channels', 'controls'
-    tvFocusedIndex: 0,
 
     // Player instances
     hlsInstance: null,
@@ -839,7 +832,7 @@ document.addEventListener('DOMContentLoaded', () => {
    UNIFIED SPATIAL NAVIGATION & TV REMOTE CONTROL LOGIC
    ========================================================================= */
 
-let focusedZone = 'channels'; // 'sidebar', 'channels', 'controls'
+let focusedZone = 'sidebar'; // 'sidebar', 'controls'
 let focusedIndex = 0;
 window.usingKeyboardNav = false;
 
@@ -859,7 +852,7 @@ function zapChannel(direction) {
     const nextChan = state.channels[nextIndex];
     if (nextChan) {
         playChannel(nextChan);
-        showActionNotification(`Zapped: ${nextChan.name}`);
+        showActionNotification(`${nextChan.name}`);
     }
 }
 
@@ -870,18 +863,18 @@ function showActionNotification(text) {
         notification = document.createElement('div');
         notification.id = 'tv-notification';
         notification.style.cssText = `
-            position: absolute;
+            position: fixed;
             top: 24px;
             right: 24px;
             z-index: 2147483647;
             background: rgba(14, 165, 233, 0.95);
             color: white;
-            padding: 10px 20px;
+            padding: 12px 24px;
             border-radius: 30px;
             font-family: var(--font-heading);
             font-weight: 700;
-            font-size: 14px;
-            box-shadow: 0 10px 25px rgba(14,165,233,0.3);
+            font-size: 15px;
+            box-shadow: 0 10px 30px rgba(14,165,233,0.4);
             pointer-events: none;
             opacity: 0;
             transform: translateY(-10px);
@@ -898,18 +891,18 @@ function showActionNotification(text) {
     window.tvNotificationTimeout = setTimeout(() => {
         notification.style.opacity = '0';
         notification.style.transform = 'translateY(-10px)';
-    }, 2000);
+    }, 2500);
 }
 
-// Find focusable items in a given zone
+// Find all focusable items in a given zone
 function getFocusables(zone) {
     switch (zone) {
         case 'sidebar':
+            // All interactive sidebar items: menu buttons, category buttons, channel cards
             const menuItems = Array.from(document.querySelectorAll('.sidebar-menu .menu-item'));
-            const catItems = Array.from(document.querySelectorAll('.category-list-container .category-btn'));
-            return [...menuItems, ...catItems];
-        case 'channels':
-            return Array.from(document.querySelectorAll('.channel-grid .channel-card'));
+            const catItems = Array.from(document.querySelectorAll('.category-list .category-btn'));
+            const channelItems = Array.from(document.querySelectorAll('#channel-grid-container .channel-card'));
+            return [...menuItems, ...catItems, ...channelItems];
         case 'controls':
             return [
                 ctrlPlayPause,
@@ -918,7 +911,7 @@ function getFocusables(zone) {
                 ctrlDataSaver,
                 ctrlSettings,
                 ctrlFullscreen
-            ].filter(el => el && el.style.display !== 'none');
+            ].filter(el => el && el.offsetParent !== null);
         default:
             return [];
     }
@@ -926,14 +919,18 @@ function getFocusables(zone) {
 
 // Spatial Keyboard/Remote Navigation Engine
 function handleSpatialNavigation(key) {
-    // 1. Fullscreen Playback Navigation (Fast Channel Zapping)
+    // 1. Fullscreen Playback Navigation — D-pad zaps channels directly
     if (document.fullscreenElement || document.webkitFullscreenElement) {
-        if (key === 'ArrowUp' || key === 'ArrowRight') {
-            zapChannel(1);
-        } else if (key === 'ArrowDown' || key === 'ArrowLeft') {
+        if (key === 'ArrowUp') {
             zapChannel(-1);
+        } else if (key === 'ArrowDown') {
+            zapChannel(1);
+        } else if (key === 'ArrowLeft') {
+            zapChannel(-1);
+        } else if (key === 'ArrowRight') {
+            zapChannel(1);
         } else if (key === 'Enter') {
-            // Flash controls in fullscreen
+            // Show controls overlay briefly
             videoWrapper.classList.add('show-controls');
             if (window.fsControlsTimeout) clearTimeout(window.fsControlsTimeout);
             window.fsControlsTimeout = setTimeout(() => {
@@ -946,48 +943,32 @@ function handleSpatialNavigation(key) {
         return;
     }
 
-    // 2. Standard Screen Spatial Zone Navigation
+    // 2. Standard (non-fullscreen) D-Pad Navigation
     let items = getFocusables(focusedZone);
     let index = focusedIndex;
 
     if (key === 'ArrowUp') {
-        if (focusedZone === 'channels') {
-            const cardsPerRow = getCardsPerRow();
-            if (index >= cardsPerRow) {
-                focusedIndex = index - cardsPerRow;
-            } else {
-                focusedZone = 'controls';
-                focusedIndex = 0;
-            }
-        } else if (index > 0) {
+        if (index > 0) {
             focusedIndex = index - 1;
         }
     } 
     else if (key === 'ArrowDown') {
-        if (focusedZone === 'channels') {
-            const cardsPerRow = getCardsPerRow();
-            if (index + cardsPerRow < items.length) {
-                focusedIndex = index + cardsPerRow;
-            } else {
-                focusedIndex = items.length - 1;
-            }
-        } else if (index < items.length - 1) {
+        if (index < items.length - 1) {
             focusedIndex = index + 1;
-        } else if (focusedZone === 'controls') {
-            focusedZone = 'channels';
+        }
+    } 
+    else if (key === 'ArrowRight') {
+        if (focusedZone === 'sidebar') {
+            focusedZone = 'controls';
             focusedIndex = 0;
+        } else if (focusedZone === 'controls') {
+            if (index < items.length - 1) {
+                focusedIndex = index + 1;
+            }
         }
     } 
     else if (key === 'ArrowLeft') {
-        if (focusedZone === 'channels') {
-            const cardsPerRow = getCardsPerRow();
-            if (index % cardsPerRow > 0) {
-                focusedIndex = index - 1;
-            } else {
-                focusedZone = 'sidebar';
-                focusedIndex = 0;
-            }
-        } else if (focusedZone === 'controls') {
+        if (focusedZone === 'controls') {
             if (index > 0) {
                 focusedIndex = index - 1;
             } else {
@@ -996,36 +977,18 @@ function handleSpatialNavigation(key) {
             }
         }
     } 
-    else if (key === 'ArrowRight') {
-        if (focusedZone === 'sidebar') {
-            focusedZone = 'channels';
-            focusedIndex = 0;
-        } else if (focusedZone === 'channels') {
-            const cardsPerRow = getCardsPerRow();
-            if ((index + 1) % cardsPerRow > 0 && index < items.length - 1) {
-                focusedIndex = index + 1;
-            }
-        } else if (focusedZone === 'controls') {
-            if (index < items.length - 1) {
-                focusedIndex = index + 1;
-            }
-        }
-    } 
     else if (key === 'Enter') {
         if (items[index]) {
             items[index].click();
         }
     }
+    else if (key === 'Escape' || key === 'Backspace') {
+        // Move focus back to sidebar
+        focusedZone = 'sidebar';
+        focusedIndex = 0;
+    }
 
     updateSpatialFocusIndicator();
-}
-
-// Compute active card grid column dimensions
-function getCardsPerRow() {
-    const grid = document.getElementById('channel-grid-container');
-    if (!grid) return 4;
-    const computed = window.getComputedStyle(grid).getPropertyValue('grid-template-columns');
-    return computed.split(' ').length || 4;
 }
 
 // Apply Neon focus layout indicators
@@ -1045,7 +1008,7 @@ function updateSpatialFocusIndicator() {
     }
 }
 
-// Real Electronic Program Guide data checker (only shows EPG if data block is available)
+// Real Electronic Program Guide data checker (only shows EPG if data exists)
 function updateEpgGuide(channel) {
     if (!channel || !epgTimelineContainer) return;
     
@@ -1066,39 +1029,28 @@ function updateEpgGuide(channel) {
     }
 }
 
-// Keyboard arrow and enter listener bindings for Spatial Navigation
+// Keyboard D-Pad and Enter key bindings
 document.addEventListener('keydown', (e) => {
-    const keyMap = {
-        'ArrowUp': 'ArrowUp',
-        'ArrowDown': 'ArrowDown',
-        'ArrowLeft': 'ArrowLeft',
-        'ArrowRight': 'ArrowRight',
-        'Enter': 'Enter',
-        'Escape': 'Escape',
-        'Backspace': 'Backspace'
-    };
+    const navKeys = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Enter', 'Escape', 'Backspace'];
     
-    if (keyMap[e.key]) {
-        // Prevent scroll when navigating with arrows
-        if (document.activeElement.tagName !== 'INPUT') {
-            e.preventDefault();
-            window.usingKeyboardNav = true;
-            handleSpatialNavigation(keyMap[e.key]);
-        }
+    if (navKeys.includes(e.key)) {
+        // Don't intercept when typing in search inputs
+        if (document.activeElement.tagName === 'INPUT') return;
+        
+        e.preventDefault();
+        window.usingKeyboardNav = true;
+        handleSpatialNavigation(e.key);
     }
 });
 
-// Clear spatial navigation glow indices when mouse movement occurs
+// Clear spatial navigation focus when mouse is used
 document.addEventListener('mousemove', () => {
-    if (!window.usingKeyboardNav) {
-        document.querySelectorAll('.tv-focus').forEach(el => el.classList.remove('tv-focus'));
-    }
+    if (window.usingKeyboardNav) return;
+    document.querySelectorAll('.tv-focus').forEach(el => el.classList.remove('tv-focus'));
 });
 
 document.addEventListener('mousedown', () => {
     window.usingKeyboardNav = false;
     document.querySelectorAll('.tv-focus').forEach(el => el.classList.remove('tv-focus'));
 });
-
-
 
