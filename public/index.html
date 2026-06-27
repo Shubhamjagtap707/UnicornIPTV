@@ -67,6 +67,10 @@
                     <button class="search-clear-btn" id="search-clear"><i class='bx bx-x'></i></button>
                 </div>
                 <div class="header-status">
+                    <button class="tv-mode-toggle-btn" id="btn-tv-mode" title="Toggle TV Mode (Android TV UI)">
+                        <i class='bx bx-tv'></i>
+                        <span>TV Mode</span>
+                    </button>
                     <div class="status-item">
                         <span class="status-label">Total Channels:</span>
                         <span class="status-value" id="total-channel-count">0</span>
@@ -147,12 +151,35 @@
                         </div>
                     </div>
                     <div class="stream-info-panel" id="stream-info">
-                        <div class="stream-meta">
-                            <h2 class="now-playing-title" id="now-playing-title">No Channel Selected</h2>
-                            <div class="now-playing-details">
-                                <span class="badge badge-group" id="now-playing-group">N/A</span>
-                                <span class="badge badge-engine" id="now-playing-engine">N/A</span>
-                                <span class="stream-stat" id="now-playing-url">Select a channel</span>
+                        <div class="stream-meta-container">
+                            <div class="stream-meta">
+                                <h2 class="now-playing-title" id="now-playing-title">No Channel Selected</h2>
+                                <div class="now-playing-details">
+                                    <span class="badge badge-group" id="now-playing-group">N/A</span>
+                                    <span class="badge badge-engine" id="now-playing-engine">N/A</span>
+                                    <span class="stream-stat" id="now-playing-url">Select a channel</span>
+                                </div>
+                            </div>
+                            
+                            <!-- EPG Program Guide Timeline -->
+                            <div class="epg-timeline-container" id="epg-timeline-container" style="display: none;">
+                                <div class="epg-program now-playing-program">
+                                    <span class="epg-label">ON NOW</span>
+                                    <div class="epg-program-details">
+                                        <span class="epg-title" id="epg-now-title">Current Program</span>
+                                        <span class="epg-time" id="epg-now-time">12:00 - 13:00</span>
+                                    </div>
+                                    <div class="epg-progress-bar">
+                                        <div class="epg-progress-fill" id="epg-now-progress" style="width: 0%;"></div>
+                                    </div>
+                                </div>
+                                <div class="epg-program next-program">
+                                    <span class="epg-label">NEXT</span>
+                                    <div class="epg-program-details">
+                                        <span class="epg-title" id="epg-next-title">Next Program</span>
+                                        <span class="epg-time" id="epg-next-time">13:00 - 14:00</span>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                         <div class="stream-actions">

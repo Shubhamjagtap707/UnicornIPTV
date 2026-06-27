@@ -17,6 +17,13 @@ let state = {
     selectedQualityLevel: -1, // -1 means Auto
     controlsTimeout: null,
     
+    // TV Mode and Spatial Navigation State
+    tvModeActive: false,
+    tvSidebarOpen: false,
+    tvChannelsOpen: false,
+    tvFocusedZone: 'channels', // 'menu', 'categories', 'channels', 'controls'
+    tvFocusedIndex: 0,
+
     // Player instances
     hlsInstance: null,
     dashInstance: null,
@@ -64,6 +71,15 @@ const ctrlFullscreen = document.getElementById('ctrl-fullscreen');
 const playerSettingsPopup = document.getElementById('player-settings-popup');
 const qualityOptionsList = document.getElementById('quality-options-list');
 const centerPlayBtn = document.getElementById('center-play-btn');
+
+// TV Mode & EPG DOM Elements
+const btnTvMode = document.getElementById('btn-tv-mode');
+const epgTimelineContainer = document.getElementById('epg-timeline-container');
+const epgNowTitle = document.getElementById('epg-now-title');
+const epgNowTime = document.getElementById('epg-now-time');
+const epgNowProgress = document.getElementById('epg-now-progress');
+const epgNextTitle = document.getElementById('epg-next-title');
+const epgNextTime = document.getElementById('epg-next-time');
 
 const API_BASE = ''; // Same host
 
@@ -410,6 +426,7 @@ function playChannel(channel) {
     nowPlayingGroup.textContent = channel.group || 'General';
     nowPlayingUrl.textContent = channel.url;
     updateNowPlayingFavIcon();
+    updateEpgGuide(channel.name);
 
     // Reset video player container state
     playerWelcome.style.display = 'none';
@@ -588,6 +605,25 @@ function setupEventListeners() {
     playerRetryBtn.addEventListener('click', () => {
         if (state.currentChannel) {
             playChannel(state.currentChannel);
+        }
+    });
+
+    // TV Mode Button
+    btnTvMode.addEventListener('click', () => {
+        state.tvModeActive = !state.tvModeActive;
+        document.body.classList.toggle('tv-mode', state.tvModeActive);
+        
+        if (state.tvModeActive) {
+            btnTvMode.classList.add('active');
+            btnTvMode.querySelector('span').textContent = 'Web Mode';
+            toggleTvMenu(true);
+            showActionNotification('TV Mode Activated');
+        } else {
+            btnTvMode.classList.remove('active');
+            btnTvMode.querySelector('span').textContent = 'TV Mode';
+            toggleTvMenu(false);
+            document.getElementById('stream-info').classList.remove('visible');
+            clearAllSpatialFocus();
         }
     });
 }
@@ -817,4 +853,337 @@ function applyDataSaverQuality() {
 document.addEventListener('DOMContentLoaded', () => {
     initCustomPlayer();
 });
+
+/* =========================================================================
+   IPTV TV MODE & ANDROID TV REMOTE SPATIAL NAVIGATION LOGIC
+   ========================================================================= */
+
+// TV Mode Menu Visibility Toggle
+function toggleTvMenu(visible) {
+    state.tvSidebarOpen = visible;
+    state.tvChannelsOpen = visible;
+    
+    const sidebar = document.querySelector('.sidebar');
+    const channelsSec = document.querySelector('.channels-section');
+    const infoPanel = document.getElementById('stream-info');
+    
+    if (visible) {
+        if (sidebar) sidebar.classList.add('tv-menu-visible');
+        if (channelsSec) channelsSec.classList.add('tv-grid-visible');
+        if (infoPanel) infoPanel.classList.add('visible');
+        videoWrapper.classList.add('show-controls');
+        
+        // Default TV navigation focus zone is the channels list
+        state.tvFocusedZone = 'channels';
+        state.tvFocusedIndex = 0;
+        updateSpatialFocus();
+    } else {
+        if (sidebar) sidebar.classList.remove('tv-menu-visible');
+        if (channelsSec) channelsSec.classList.remove('tv-grid-visible');
+        if (infoPanel) infoPanel.classList.remove('visible');
+        videoWrapper.classList.remove('show-controls');
+        clearAllSpatialFocus();
+    }
+}
+
+// Android TV Remote & Keyboard Spatial Navigation Engine
+function handleTvNavigation(key) {
+    if (!state.tvModeActive) return;
+
+    // Helper: Find focusable HTML elements inside a zone
+    const getFocusables = (zone) => {
+        switch (zone) {
+            case 'menu':
+                return Array.from(document.querySelectorAll('.sidebar-menu .menu-item'));
+            case 'categories':
+                return Array.from(document.querySelectorAll('.category-list-container .category-btn'));
+            case 'channels':
+                return Array.from(document.querySelectorAll('.channel-grid .channel-card'));
+            case 'controls':
+                return [
+                    ctrlPlayPause,
+                    ctrlVolume,
+                    ctrlVolumeSlider,
+                    ctrlDataSaver,
+                    ctrlSettings,
+                    ctrlFullscreen
+                ].filter(el => el && el.style.display !== 'none');
+            default:
+                return [];
+        }
+    };
+
+    let items = getFocusables(state.tvFocusedZone);
+    let index = state.tvFocusedIndex;
+
+    // 1. Handle Navigation when all UI Menus/Overlays are closed (True Full Screen Playback)
+    if (!state.tvSidebarOpen && !state.tvChannelsOpen) {
+        if (key === 'ArrowUp') {
+            zapChannel(-1); // Channel Up
+        } else if (key === 'ArrowDown') {
+            zapChannel(1); // Channel Down
+        } else if (key === 'ArrowLeft' || key === 'Enter') {
+            toggleTvMenu(true); // Open EPG / Channel Menu
+        } else if (key === 'ArrowRight') {
+            showEpgPanelTemp(); // Show program details temporarily
+        }
+        return;
+    }
+
+    // 2. Handle Navigation when EPG / Overlays are open
+    if (key === 'ArrowUp') {
+        if (state.tvFocusedZone === 'controls') {
+            state.tvFocusedZone = 'channels';
+            state.tvFocusedIndex = 0;
+        } else if (index > 0) {
+            state.tvFocusedIndex = index - 1;
+        }
+    } 
+    else if (key === 'ArrowDown') {
+        if (index < items.length - 1) {
+            state.tvFocusedIndex = index + 1;
+        } else if (state.tvFocusedZone === 'channels') {
+            state.tvFocusedZone = 'controls';
+            state.tvFocusedIndex = 0;
+        }
+    } 
+    else if (key === 'ArrowLeft') {
+        // Move focus panels from right to left: channels -> categories -> menu
+        if (state.tvFocusedZone === 'channels') {
+            state.tvFocusedZone = 'categories';
+            state.tvFocusedIndex = 0;
+        } else if (state.tvFocusedZone === 'categories') {
+            state.tvFocusedZone = 'menu';
+            state.tvFocusedIndex = 0;
+        } else if (state.tvFocusedZone === 'controls') {
+            if (index > 0) {
+                state.tvFocusedIndex = index - 1;
+            } else {
+                state.tvFocusedZone = 'categories';
+                state.tvFocusedIndex = 0;
+            }
+        }
+    } 
+    else if (key === 'ArrowRight') {
+        // Move focus panels from left to right: menu -> categories -> channels
+        if (state.tvFocusedZone === 'menu') {
+            state.tvFocusedZone = 'categories';
+            state.tvFocusedIndex = 0;
+        } else if (state.tvFocusedZone === 'categories') {
+            state.tvFocusedZone = 'channels';
+            state.tvFocusedIndex = 0;
+        } else if (state.tvFocusedZone === 'controls') {
+            if (index < items.length - 1) {
+                state.tvFocusedIndex = index + 1;
+            }
+        }
+    } 
+    else if (key === 'Enter') {
+        if (items[index]) {
+            items[index].click();
+            // Close overlay if channel started playing
+            if (state.tvFocusedZone === 'channels') {
+                setTimeout(() => toggleTvMenu(false), 250);
+            }
+        }
+    } 
+    else if (key === 'Backspace' || key === 'Escape') {
+        toggleTvMenu(false); // Close menus and return to video background
+    }
+
+    updateSpatialFocus();
+}
+
+// Update Neon Focus Outline class in DOM
+function updateSpatialFocus() {
+    clearAllSpatialFocus();
+    
+    const getFocusables = (zone) => {
+        switch (zone) {
+            case 'menu':
+                return Array.from(document.querySelectorAll('.sidebar-menu .menu-item'));
+            case 'categories':
+                return Array.from(document.querySelectorAll('.category-list-container .category-btn'));
+            case 'channels':
+                return Array.from(document.querySelectorAll('.channel-grid .channel-card'));
+            case 'controls':
+                return [
+                    ctrlPlayPause,
+                    ctrlVolume,
+                    ctrlVolumeSlider,
+                    ctrlDataSaver,
+                    ctrlSettings,
+                    ctrlFullscreen
+                ].filter(el => el && el.style.display !== 'none');
+            default:
+                return [];
+        }
+    };
+
+    let items = getFocusables(state.tvFocusedZone);
+    if (items.length === 0) return;
+
+    if (state.tvFocusedIndex < 0) state.tvFocusedIndex = 0;
+    if (state.tvFocusedIndex >= items.length) state.tvFocusedIndex = items.length - 1;
+    
+    const activeEl = items[state.tvFocusedIndex];
+    if (activeEl) {
+        activeEl.classList.add('tv-focus');
+        activeEl.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    }
+}
+
+// Remove all neon focus items
+function clearAllSpatialFocus() {
+    document.querySelectorAll('.tv-focus').forEach(el => el.classList.remove('tv-focus'));
+}
+
+// TV Channel Zapping (Direct ArrowUp/ArrowDown on Fullscreen Playback)
+function zapChannel(direction) {
+    if (state.channels.length === 0) return;
+    
+    let currentIndex = -1;
+    if (state.currentChannel) {
+        currentIndex = state.channels.findIndex(c => c.id === state.currentChannel.id);
+    }
+    
+    let nextIndex = currentIndex + direction;
+    if (nextIndex < 0) nextIndex = state.channels.length - 1;
+    if (nextIndex >= state.channels.length) nextIndex = 0;
+    
+    const nextChan = state.channels[nextIndex];
+    if (nextChan) {
+        playChannel(nextChan);
+        showActionNotification(`Channel Zapped: ${nextChan.name}`);
+    }
+}
+
+// Temporary show EPG banner on ArrowRight keypress
+function showEpgPanelTemp() {
+    const info = document.getElementById('stream-info');
+    if (info) info.classList.add('visible');
+    
+    if (window.epgPanelTimeout) clearTimeout(window.epgPanelTimeout);
+    window.epgPanelTimeout = setTimeout(() => {
+        if (!state.tvSidebarOpen && !state.tvChannelsOpen) {
+            if (info) info.classList.remove('visible');
+        }
+    }, 4000);
+}
+
+// TV Mode OSD Notification banner (Channel Zapping / Activated message)
+function showActionNotification(text) {
+    let notification = document.getElementById('tv-notification');
+    if (!notification) {
+        notification = document.createElement('div');
+        notification.id = 'tv-notification';
+        notification.style.cssText = `
+            position: absolute;
+            top: 24px;
+            right: 24px;
+            z-index: 1000;
+            background: rgba(14, 165, 233, 0.95);
+            color: white;
+            padding: 10px 20px;
+            border-radius: 30px;
+            font-family: var(--font-heading);
+            font-weight: 700;
+            font-size: 14px;
+            box-shadow: 0 10px 25px rgba(14,165,233,0.3);
+            pointer-events: none;
+            opacity: 0;
+            transform: translateY(-10px);
+            transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        `;
+        document.body.appendChild(notification);
+    }
+    
+    notification.textContent = text;
+    notification.style.opacity = '1';
+    notification.style.transform = 'translateY(0)';
+    
+    if (window.tvNotificationTimeout) clearTimeout(window.tvNotificationTimeout);
+    window.tvNotificationTimeout = setTimeout(() => {
+        notification.style.opacity = '0';
+        notification.style.transform = 'translateY(-10px)';
+    }, 2000);
+}
+
+// Dynamic EPG Guide Mock Generator
+function updateEpgGuide(channelName) {
+    if (!channelName || !epgTimelineContainer) return;
+    
+    const seedString = (str) => {
+        let hash = 0;
+        for (let i = 0; i < str.length; i++) {
+            hash = str.charCodeAt(i) + ((hash << 5) - hash);
+        }
+        return Math.abs(hash);
+    };
+
+    const hashVal = seedString(channelName);
+    const now = new Date();
+    const currentHour = now.getHours();
+    
+    const genres = [
+        ["Morning Breakfast News", "Live Talk Show", "Global News Today", "Financial Report"],
+        ["World News Report", "Science & Technology", "Press Conference Live", "Political Debate"],
+        ["Prime Time Special", "Evening Crime Report", "Investigative Journalism", "Late Night Headlines"],
+        ["Music Mix Live", "Sports Review Daily", "Tech Gadgets Weekly", "Documentary Special"]
+    ];
+
+    const currentGenreList = genres[hashVal % genres.length];
+    const programIndex = hashVal % currentGenreList.length;
+    const nowProgramName = currentGenreList[programIndex];
+    const nextProgramName = currentGenreList[(programIndex + 1) % currentGenreList.length];
+
+    const programStart = new Date(now);
+    programStart.setMinutes(0);
+    programStart.setSeconds(0);
+    
+    const programEnd = new Date(programStart);
+    programEnd.setHours(programStart.getHours() + 1);
+
+    const nextProgramStart = new Date(programEnd);
+    const nextProgramEnd = new Date(nextProgramStart);
+    nextProgramEnd.setHours(nextProgramStart.getHours() + 1);
+
+    const formatTime = (date) => {
+        return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
+    };
+
+    const totalMinutes = 60;
+    const elapsedMinutes = now.getMinutes();
+    const progressPercent = Math.min(100, Math.max(0, (elapsedMinutes / totalMinutes) * 100));
+
+    if (epgNowTitle) epgNowTitle.textContent = nowProgramName;
+    if (epgNowTime) epgNowTime.textContent = `${formatTime(programStart)} - ${formatTime(programEnd)}`;
+    if (epgNowProgress) epgNowProgress.style.width = `${progressPercent}%`;
+
+    if (epgNextTitle) epgNextTitle.textContent = nextProgramName;
+    if (epgNextTime) epgNextTime.textContent = `${formatTime(nextProgramStart)} - ${formatTime(nextProgramEnd)}`;
+
+    epgTimelineContainer.style.display = 'flex';
+}
+
+// Hook TV Mode arrow and enter remote keyboard event listener
+document.addEventListener('keydown', (e) => {
+    if (state.tvModeActive) {
+        const keyMap = {
+            'ArrowUp': 'ArrowUp',
+            'ArrowDown': 'ArrowDown',
+            'ArrowLeft': 'ArrowLeft',
+            'ArrowRight': 'ArrowRight',
+            'Enter': 'Enter',
+            'Escape': 'Escape',
+            'Backspace': 'Backspace'
+        };
+        
+        if (keyMap[e.key]) {
+            e.preventDefault();
+            handleTvNavigation(keyMap[e.key]);
+        }
+    }
+});
+
 
