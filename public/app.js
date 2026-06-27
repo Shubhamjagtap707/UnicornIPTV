@@ -11,7 +11,7 @@ let state = {
     searchQuery: '',
     favorites: new Set(),
     currentChannel: null,
-    
+
     // Player instances
     hlsInstance: null,
     dashInstance: null,
@@ -48,7 +48,7 @@ const btnAllChannels = document.getElementById('btn-all-channels');
 const btnFavorites = document.getElementById('btn-favorites');
 const favCountEl = document.getElementById('fav-count');
 
-const API_BASE = ''; // Same host
+const API_BASE = 'https://unicorntv.shubham-trinity246.workers.dev'; // Same host
 
 // Initialize App
 document.addEventListener('DOMContentLoaded', () => {
@@ -90,7 +90,7 @@ async function fetchCategories() {
         if (data.success) {
             state.groups = data.groups;
             renderCategories();
-            
+
             // Sum all channel counts
             const totalCount = data.groups.reduce((acc, g) => acc + g.count, 0);
             totalChannelCountEl.textContent = totalCount.toLocaleString();
@@ -105,7 +105,7 @@ async function fetchCategories() {
 function renderCategories() {
     const filterText = groupSearchInput.value.toLowerCase();
     const filteredGroups = state.groups.filter(g => g.name.toLowerCase().includes(filterText));
-    
+
     if (filteredGroups.length === 0) {
         categoriesContainer.innerHTML = '<div class="category-btn" style="pointer-events: none; opacity: 0.5;">No groups found</div>';
         return;
@@ -165,7 +165,7 @@ async function loadChannels(page = 1, append = false) {
 
     try {
         let url = `${API_BASE}/api/channels?page=${page}&limit=${state.limit}`;
-        
+
         if (state.activeCategory === 'favorites') {
             if (state.favorites.size === 0) {
                 renderChannels([], false);
@@ -188,7 +188,7 @@ async function loadChannels(page = 1, append = false) {
 
         if (data.success) {
             state.totalPages = data.totalPages;
-            
+
             if (append) {
                 state.channels = [...state.channels, ...data.channels];
                 renderChannels(data.channels, true);
@@ -198,7 +198,7 @@ async function loadChannels(page = 1, append = false) {
             }
 
             resultsCountEl.textContent = `Showing ${state.channels.length} of ${data.total} channels`;
-            
+
             // Show/hide load more button
             if (state.currentPage < state.totalPages) {
                 loadMoreArea.style.display = 'flex';
@@ -237,14 +237,14 @@ function renderChannels(channelsList, append = false) {
         const isFav = state.favorites.has(ch.id);
         const isPlaying = state.currentChannel && state.currentChannel.id === ch.id;
         const logoUrl = ch.logo && ch.logo.startsWith('http') ? ch.logo : null;
-        
+
         return `
             <div class="channel-card ${isPlaying ? 'playing' : ''}" data-id="${ch.id}">
                 <div class="channel-logo-container">
-                    ${logoUrl ? 
-                        `<img src="${logoUrl}" class="channel-logo" alt="${escapeHtml(ch.name)}" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">` : 
-                        ''
-                    }
+                    ${logoUrl ?
+                `<img src="${logoUrl}" class="channel-logo" alt="${escapeHtml(ch.name)}" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">` :
+                ''
+            }
                     <div class="channel-logo-fallback" style="${logoUrl ? 'display:none;' : 'display:flex;'}">
                         <i class='bx bx-tv'></i>
                     </div>
@@ -267,7 +267,7 @@ function renderChannels(channelsList, append = false) {
         card.addEventListener('click', (e) => {
             // Avoid selecting card if they click the heart button
             if (e.target.closest('.card-fav-btn')) return;
-            
+
             const id = card.dataset.id;
             const channel = state.channels.find(ch => ch.id === id);
             if (channel) {
@@ -281,7 +281,7 @@ function renderChannels(channelsList, append = false) {
             e.stopPropagation();
             const id = btn.dataset.id;
             toggleFavorite(id);
-            
+
             // Toggle active status UI
             const icon = btn.querySelector('i');
             if (state.favorites.has(id)) {
@@ -319,7 +319,7 @@ function toggleFavorite(id) {
         state.favorites.add(id);
     }
     saveFavorites();
-    
+
     // Update active stream favorites icon if applicable
     if (state.currentChannel && state.currentChannel.id === id) {
         updateNowPlayingFavIcon();
@@ -353,7 +353,7 @@ function destroyPlayers() {
         state.mpegtsInstance.destroy();
         state.mpegtsInstance = null;
     }
-    
+
     videoPlayer.src = '';
     videoPlayer.removeAttribute('src');
     videoPlayer.load();
@@ -378,7 +378,7 @@ function getStreamEngine(url) {
 // Play Selected Channel
 function playChannel(channel) {
     state.currentChannel = channel;
-    
+
     // Highlight active card
     document.querySelectorAll('.channel-card').forEach(card => {
         if (card.dataset.id === channel.id) {
@@ -436,7 +436,7 @@ function playChannel(channel) {
             state.dashInstance = dashjs.MediaPlayer().create();
             state.dashInstance.initialize(videoPlayer, playUrl, true);
             state.dashInstance.on('error', (e) => handlePlayError(e));
-        } 
+        }
         else if (engine === 'MPEG-TS') {
             if (mpegts.getFeatureList().mseLivePlayback) {
                 state.mpegtsInstance = mpegts.createPlayer({
@@ -452,7 +452,7 @@ function playChannel(channel) {
             } else {
                 handlePlayError('MPEG-TS browser playback is not supported.');
             }
-        } 
+        }
         else { // HLS Default
             if (Hls.isSupported()) {
                 state.hlsInstance = new Hls({
