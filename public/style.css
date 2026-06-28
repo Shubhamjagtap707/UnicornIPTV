@@ -90,6 +90,29 @@ body {
     overflow: hidden;
 }
 
+/* Sidebar View toggles */
+.sidebar.view-channels .category-section {
+    display: none !important;
+}
+
+.sidebar.view-categories .sidebar-search-box,
+.sidebar.view-categories .sidebar-menu,
+.sidebar.view-categories .sidebar-channel-list {
+    display: none !important;
+}
+
+.sidebar.view-categories .category-section {
+    flex: 1 !important;
+    max-height: none !important;
+    padding: 0 16px 16px 16px !important;
+}
+
+.sidebar.view-categories .category-list {
+    flex: 1 !important;
+    overflow-y: auto !important;
+}
+
+
 /* Logo */
 .sidebar-header {
     padding: 16px 20px 12px 20px;

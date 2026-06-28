@@ -20,7 +20,8 @@ let state = {
     // Player instances
     hlsInstance: null,
     dashInstance: null,
-    mpegtsInstance: null
+    mpegtsInstance: null,
+    isLoadingChannels: false
 };
 
 // DOM Elements
@@ -79,6 +80,7 @@ const API_BASE = ''; // Same host
 document.addEventListener('DOMContentLoaded', () => {
     loadFavorites();
     fetchCategories();
+    switchSidebarView('channels');
     loadChannels(1, false);
     setupEventListeners();
 });
@@ -155,6 +157,21 @@ function renderCategories() {
     });
 }
 
+// Switch Sidebar View between channels list and categories list
+function switchSidebarView(view) {
+    const sidebar = document.getElementById('sidebar-panel');
+    if (!sidebar) return;
+    
+    if (view === 'channels') {
+        sidebar.classList.remove('view-categories');
+        sidebar.classList.add('view-channels');
+    } else if (view === 'categories') {
+        sidebar.classList.remove('view-channels');
+        sidebar.classList.add('view-categories');
+        renderCategories(); // ensure list is populated/rendered
+    }
+}
+
 // Set active category and fetch its channels
 function setActiveCategory(category) {
     // Remove active states
@@ -165,13 +182,13 @@ function setActiveCategory(category) {
     state.currentPage = 1;
     state.searchQuery = '';
     channelSearchInput.value = '';
-    searchClearBtn.style.display = 'none';
+    if (searchClearBtn) searchClearBtn.style.display = 'none';
 
     if (category === 'favorites') {
-        btnFavorites.classList.add('active');
+        if (btnFavorites) btnFavorites.classList.add('active');
         activeCategoryTitle.textContent = 'My Favorites';
     } else if (category === null) {
-        btnAllChannels.classList.add('active');
+        if (btnAllChannels) btnAllChannels.classList.add('active');
         activeCategoryTitle.textContent = 'All Channels';
     } else {
         // Highlight category button
@@ -180,11 +197,25 @@ function setActiveCategory(category) {
         activeCategoryTitle.textContent = category;
     }
 
-    loadChannels(1, false);
+    // Switch view back to channels list!
+    switchSidebarView('channels');
+
+    // Fetch channels and set focus to the first channel card
+    loadChannels(1, false).then(() => {
+        // Focus first channel card
+        focusedZone = 'sidebar';
+        const items = getFocusables('sidebar');
+        const firstChanIdx = items.findIndex(el => el.classList.contains('channel-card'));
+        focusedIndex = firstChanIdx !== -1 ? firstChanIdx : 0;
+        updateSpatialFocusIndicator();
+    });
 }
 
 // Fetch and load channels
 async function loadChannels(page = 1, append = false) {
+    if (state.isLoadingChannels) return;
+    state.isLoadingChannels = true;
+    
     showSkeletons(append);
     state.currentPage = page;
 
@@ -195,7 +226,7 @@ async function loadChannels(page = 1, append = false) {
             if (state.favorites.size === 0) {
                 renderChannels([], false);
                 resultsCountEl.textContent = '0 channels';
-                loadMoreArea.style.display = 'none';
+                state.isLoadingChannels = false;
                 return;
             }
             const idsList = Array.from(state.favorites).join(',');
@@ -223,18 +254,15 @@ async function loadChannels(page = 1, append = false) {
             }
 
             resultsCountEl.textContent = `Showing ${state.channels.length} of ${data.total} channels`;
-            
-            // Show/hide load more button
-            if (state.currentPage < state.totalPages) {
-                loadMoreArea.style.display = 'flex';
-            } else {
-                loadMoreArea.style.display = 'none';
-            }
         }
     } catch (error) {
         console.error('Error loading channels:', error);
         channelGridContainer.innerHTML = `<div class="error-text">Failed to load channels. Please refresh or retry.</div>`;
-        loadMoreArea.style.display = 'none';
+    } finally {
+        state.isLoadingChannels = false;
+        // Clean up skeletons if any are left
+        const skeletons = channelGridContainer.querySelectorAll('.skeleton-card');
+        skeletons.forEach(el => el.remove());
     }
 }
 
@@ -575,12 +603,16 @@ function setupEventListeners() {
         loadChannels(1, false);
     });
 
-    // Load More button
-    loadMoreBtn.addEventListener('click', () => {
-        if (state.currentPage < state.totalPages) {
-            loadChannels(state.currentPage + 1, true);
-        }
-    });
+    // Infinite scrolling on scroll container reach-bottom
+    if (channelGridContainer) {
+        channelGridContainer.addEventListener('scroll', () => {
+            const threshold = 150; // pixels from the bottom
+            const isNearBottom = (channelGridContainer.scrollHeight - channelGridContainer.scrollTop - channelGridContainer.clientHeight) < threshold;
+            if (isNearBottom && !state.isLoadingChannels && state.currentPage < state.totalPages) {
+                loadChannels(state.currentPage + 1, true);
+            }
+        });
+    }
 
     // Favorite button on playing deck
     nowPlayingFavBtn.addEventListener('click', () => {
@@ -898,12 +930,21 @@ function showActionNotification(text) {
 function getFocusables(zone) {
     switch (zone) {
         case 'sidebar':
-            // All interactive sidebar items: menu buttons, category buttons, channel cards
-            const menuItems = Array.from(document.querySelectorAll('.sidebar-menu .menu-item'));
-            const catItems = Array.from(document.querySelectorAll('.category-list .category-btn'));
-            const channelItems = Array.from(document.querySelectorAll('#channel-grid-container .channel-card'));
-            return [...menuItems, ...catItems, ...channelItems];
+            const sidebarPanel = document.getElementById('sidebar-panel');
+            if (sidebarPanel && sidebarPanel.classList.contains('view-categories')) {
+                // In categories view, focus category buttons
+                return Array.from(document.querySelectorAll('.category-list .category-btn'));
+            } else {
+                // In channels view, focus menu items and channel cards
+                const menuItems = Array.from(document.querySelectorAll('.sidebar-menu .menu-item'));
+                const channelItems = Array.from(document.querySelectorAll('#channel-grid-container .channel-card'));
+                return [...menuItems, ...channelItems];
+            }
         case 'controls':
+            // If quality settings popup is open, only return the settings options!
+            if (playerSettingsPopup && playerSettingsPopup.classList.contains('active')) {
+                return Array.from(playerSettingsPopup.querySelectorAll('.option-item'));
+            }
             return [
                 ctrlPlayPause,
                 ctrlVolume,
@@ -918,32 +959,94 @@ function getFocusables(zone) {
 }
 
 // Spatial Keyboard/Remote Navigation Engine
+let lastLeftKeyPressTime = 0;
+
 function handleSpatialNavigation(key) {
-    // 1. Fullscreen Playback Navigation — D-pad zaps channels directly
-    if (document.fullscreenElement || document.webkitFullscreenElement) {
-        if (key === 'ArrowUp') {
-            zapChannel(-1);
-        } else if (key === 'ArrowDown') {
-            zapChannel(1);
-        } else if (key === 'ArrowLeft') {
-            zapChannel(-1);
-        } else if (key === 'ArrowRight') {
-            zapChannel(1);
-        } else if (key === 'Enter') {
-            // Show controls overlay briefly
-            videoWrapper.classList.add('show-controls');
-            if (window.fsControlsTimeout) clearTimeout(window.fsControlsTimeout);
-            window.fsControlsTimeout = setTimeout(() => {
-                if (!videoPlayer.paused) videoWrapper.classList.remove('show-controls');
-            }, 3000);
-        } else if (key === 'Backspace' || key === 'Escape') {
-            if (document.exitFullscreen) document.exitFullscreen();
-            else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
+    const isPlayerClean = !videoWrapper.classList.contains('show-controls');
+
+    // A. Clean Playback Mode Key Intercepts (nothing over the video player)
+    if (isPlayerClean && focusedZone !== 'sidebar') {
+        if (key === 'ArrowLeft') {
+            // Exit fullscreen if active so user can see sidebar
+            if (document.fullscreenElement || document.webkitFullscreenElement) {
+                if (document.exitFullscreen) document.exitFullscreen();
+                else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
+            }
+            
+            const now = Date.now();
+            const timeDiff = now - lastLeftKeyPressTime;
+            lastLeftKeyPressTime = now;
+            
+            if (timeDiff < 500) {
+                // Double Left press -> activate categories list view
+                switchSidebarView('categories');
+                focusedZone = 'sidebar';
+                const items = getFocusables('sidebar');
+                const catIdx = items.findIndex(el => el.classList.contains('category-btn'));
+                focusedIndex = catIdx !== -1 ? catIdx : 0;
+            } else {
+                // Single Left press -> activate channels list view
+                switchSidebarView('channels');
+                focusedZone = 'sidebar';
+                const items = getFocusables('sidebar');
+                const playingIdx = items.findIndex(el => el.classList.contains('channel-card') && el.classList.contains('playing'));
+                const firstChanIdx = items.findIndex(el => el.classList.contains('channel-card'));
+                focusedIndex = playingIdx !== -1 ? playingIdx : (firstChanIdx !== -1 ? firstChanIdx : 0);
+            }
+            updateSpatialFocusIndicator();
+            return;
         }
+        
+        if (key === 'Enter') {
+            // OK/Enter when clean -> show controls and navigate them
+            videoWrapper.classList.add('show-controls');
+            focusedZone = 'controls';
+            focusedIndex = 0;
+            updateSpatialFocusIndicator();
+            return;
+        }
+        
+        // In fullscreen zapping, allow ArrowUp/Down/Left/Right to zap channels
+        if (document.fullscreenElement || document.webkitFullscreenElement) {
+            if (key === 'ArrowUp' || key === 'ArrowLeft') {
+                zapChannel(-1);
+            } else if (key === 'ArrowDown' || key === 'ArrowRight') {
+                zapChannel(1);
+            }
+            return;
+        }
+    }
+
+    // B. Quality settings popup active checks
+    if (playerSettingsPopup && playerSettingsPopup.classList.contains('active')) {
+        let items = getFocusables('controls');
+        let index = focusedIndex;
+        
+        if (key === 'ArrowUp') {
+            if (index > 0) focusedIndex = index - 1;
+        } else if (key === 'ArrowDown') {
+            if (index < items.length - 1) focusedIndex = index + 1;
+        } else if (key === 'Enter') {
+            if (items[index]) items[index].click();
+        } else if (key === 'Escape' || key === 'Backspace' || key === 'ArrowLeft' || key === 'ArrowRight') {
+            playerSettingsPopup.classList.remove('active');
+            // Re-focus settings gear button
+            const mainControls = [
+                ctrlPlayPause,
+                ctrlVolume,
+                ctrlVolumeSlider,
+                ctrlDataSaver,
+                ctrlSettings,
+                ctrlFullscreen
+            ].filter(el => el && el.offsetParent !== null);
+            focusedIndex = mainControls.indexOf(ctrlSettings);
+            if (focusedIndex === -1) focusedIndex = 0;
+        }
+        updateSpatialFocusIndicator();
         return;
     }
 
-    // 2. Standard (non-fullscreen) D-Pad Navigation
+    // C. Standard D-Pad Navigation (when sidebar is active or controls are shown)
     let items = getFocusables(focusedZone);
     let index = focusedIndex;
 
@@ -959,21 +1062,35 @@ function handleSpatialNavigation(key) {
     } 
     else if (key === 'ArrowRight') {
         if (focusedZone === 'sidebar') {
+            // Show controls and navigate them
+            videoWrapper.classList.add('show-controls');
             focusedZone = 'controls';
             focusedIndex = 0;
         } else if (focusedZone === 'controls') {
+            // Navigate strictly inside player controls (wrapping)
             if (index < items.length - 1) {
                 focusedIndex = index + 1;
+            } else {
+                focusedIndex = 0;
             }
         }
     } 
     else if (key === 'ArrowLeft') {
-        if (focusedZone === 'controls') {
+        if (focusedZone === 'sidebar') {
+            const activeEl = items[focusedIndex];
+            // If focused on channel card in channels view, Left opens categories list
+            if (activeEl && activeEl.classList.contains('channel-card')) {
+                switchSidebarView('categories');
+                const newItems = getFocusables('sidebar');
+                const firstCatIdx = newItems.findIndex(el => el.classList.contains('category-btn'));
+                focusedIndex = firstCatIdx !== -1 ? firstCatIdx : 0;
+            }
+        } else if (focusedZone === 'controls') {
+            // Navigate strictly inside player controls (wrapping)
             if (index > 0) {
                 focusedIndex = index - 1;
             } else {
-                focusedZone = 'sidebar';
-                focusedIndex = 0;
+                focusedIndex = items.length - 1;
             }
         }
     } 
@@ -983,9 +1100,15 @@ function handleSpatialNavigation(key) {
         }
     }
     else if (key === 'Escape' || key === 'Backspace') {
+        // Close settings popup if open
+        if (playerSettingsPopup && playerSettingsPopup.classList.contains('active')) {
+            playerSettingsPopup.classList.remove('active');
+        }
         // Move focus back to sidebar
         focusedZone = 'sidebar';
         focusedIndex = 0;
+        // Hide player controls overlay
+        videoWrapper.classList.remove('show-controls');
     }
 
     updateSpatialFocusIndicator();
@@ -1005,6 +1128,17 @@ function updateSpatialFocusIndicator() {
     if (activeEl) {
         activeEl.classList.add('tv-focus');
         activeEl.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+
+        // Automated Infinite load on remote/D-pad navigation:
+        if (focusedZone === 'sidebar' && activeEl.classList.contains('channel-card')) {
+            const allChannelCards = Array.from(document.querySelectorAll('#channel-grid-container .channel-card'));
+            const cardIdx = allChannelCards.indexOf(activeEl);
+            if (cardIdx !== -1 && cardIdx >= allChannelCards.length - 3) {
+                if (state.currentPage < state.totalPages && !state.isLoadingChannels) {
+                    loadChannels(state.currentPage + 1, true);
+                }
+            }
+        }
     }
 }
 
