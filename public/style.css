@@ -345,47 +345,78 @@ body {
 }
 
 .category-btn {
-    background: transparent;
-    border: none;
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid rgba(255, 255, 255, 0.03);
     outline: none;
     color: var(--text-muted);
     font-family: var(--font-body);
-    font-size: 12px;
-    font-weight: 500;
-    padding: 6px 10px;
-    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 600;
+    padding: 11px 14px;
+    border-radius: var(--radius-sm);
     cursor: pointer;
     display: flex;
     align-items: center;
     justify-content: space-between;
-    transition: all 0.25s cubic-bezier(0.2, 0.8, 0.2, 1);
+    transition: all 0.25s ease;
     text-align: left;
+    margin-bottom: 6px;
+    width: 100%;
 }
 
 .category-btn:hover {
     color: var(--text-main);
-    background: rgba(255, 255, 255, 0.04);
-    transform: translateX(3px);
+    background: rgba(255, 255, 255, 0.06);
+    border-color: rgba(255, 255, 255, 0.08);
+    transform: translateX(4px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
 }
 
 .category-btn.active {
     color: #fff;
-    background: linear-gradient(135deg, rgba(14, 165, 233, 0.25) 0%, rgba(139, 92, 246, 0.2) 100%);
+    background: linear-gradient(135deg, rgba(14, 165, 233, 0.25) 0%, rgba(139, 92, 246, 0.2) 100%) !important;
+    border-color: rgba(14, 165, 233, 0.3) !important;
+    box-shadow: 0 4px 16px rgba(14, 165, 233, 0.25);
     font-weight: 600;
+}
+
+.cat-btn-left {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-width: 0;
+    flex-grow: 1;
+}
+
+.cat-btn-left span {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.cat-icon {
+    font-size: 17px;
+    color: var(--primary);
+    transition: var(--transition);
+}
+
+.category-btn.active .cat-icon {
+    color: #fff;
 }
 
 .category-btn .cat-count {
     font-size: 10px;
-    color: var(--text-dark);
-    background: rgba(0, 0, 0, 0.2);
-    padding: 1px 5px;
-    border-radius: 10px;
+    color: var(--text-muted);
+    background: rgba(0, 0, 0, 0.35);
+    padding: 2px 7px;
+    border-radius: 20px;
+    font-weight: 700;
     transition: var(--transition);
 }
 
 .category-btn.active .cat-count {
-    color: var(--primary);
-    background: rgba(14, 165, 233, 0.15);
+    color: #fff;
+    background: rgba(255, 255, 255, 0.2);
 }
 
 /* =========================================================================

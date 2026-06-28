@@ -51,6 +51,7 @@ const loadMoreBtn = document.getElementById('load-more-btn');
 const loadMoreArea = document.getElementById('load-more-area');
 
 const btnAllChannels = document.getElementById('btn-all-channels');
+const btnAllCategories = document.getElementById('btn-all-categories');
 const btnFavorites = document.getElementById('btn-favorites');
 const favCountEl = document.getElementById('fav-count');
 
@@ -129,6 +130,27 @@ async function fetchCategories() {
     }
 }
 
+// Helper: Map keywords inside category names to suitable Boxicons
+function getCategoryIcon(catName) {
+    const name = catName.toLowerCase();
+    if (name.includes('all')) return 'bx-category';
+    if (name.includes('news')) return 'bx-news';
+    if (name.includes('sport') || name.includes('football') || name.includes('cricket') || name.includes('golf')) return 'bx-run';
+    if (name.includes('movie') || name.includes('cinema') || name.includes('film')) return 'bx-movie-play';
+    if (name.includes('music') || name.includes('song')) return 'bx-music';
+    if (name.includes('kid') || name.includes('cartoon') || name.includes('animation')) return 'bx-smile';
+    if (name.includes('document') || name.includes('history') || name.includes('science')) return 'bx-book-open';
+    if (name.includes('entertainment') || name.includes('show') || name.includes('variety')) return 'bx-party';
+    if (name.includes('religion') || name.includes('god') || name.includes('faith') || name.includes('church')) return 'bx-compass';
+    if (name.includes('education') || name.includes('learn')) return 'bx-graduation';
+    if (name.includes('weather')) return 'bx-cloud';
+    if (name.includes('game') || name.includes('esport')) return 'bx-game';
+    if (name.includes('life') || name.includes('style') || name.includes('fashion')) return 'bx-heart';
+    if (name.includes('fav')) return 'bxs-heart';
+    
+    return 'bx-folder'; // default icon
+}
+
 // Render Categories Sidebar
 function renderCategories() {
     const filterText = groupSearchInput.value.toLowerCase();
@@ -139,7 +161,10 @@ function renderCategories() {
     const isAllActive = state.activeCategory === null;
     let html = `
         <button class="category-btn ${isAllActive ? 'active' : ''}" data-group="all-categories">
-            <span>All Categories</span>
+            <span class="cat-btn-left">
+                <i class='bx bx-category cat-icon'></i>
+                <span>All Categories</span>
+            </span>
             <span class="cat-count">${totalCount}</span>
         </button>
     `;
@@ -149,7 +174,10 @@ function renderCategories() {
             const isActive = state.activeCategory === group.name;
             return `
                 <button class="category-btn ${isActive ? 'active' : ''}" data-group="${group.name}">
-                    <span>${escapeHtml(group.name)}</span>
+                    <span class="cat-btn-left">
+                        <i class='bx ${getCategoryIcon(group.name)} cat-icon'></i>
+                        <span>${escapeHtml(group.name)}</span>
+                    </span>
                     <span class="cat-count">${group.count}</span>
                 </button>
             `;
@@ -603,6 +631,20 @@ function playChannel(channel) {
 function setupEventListeners() {
     // Menu items
     btnAllChannels.addEventListener('click', () => setActiveCategory(null));
+    if (btnAllCategories) {
+        btnAllCategories.addEventListener('click', () => {
+            document.querySelectorAll('.sidebar-menu .menu-item').forEach(el => el.classList.remove('active'));
+            btnAllCategories.classList.add('active');
+            switchSidebarView('categories');
+            
+            // Focus first category button
+            focusedZone = 'sidebar';
+            const items = getFocusables('sidebar');
+            const catIdx = items.findIndex(el => el.classList.contains('category-btn'));
+            focusedIndex = catIdx !== -1 ? catIdx : 0;
+            updateSpatialFocusIndicator();
+        });
+    }
     btnFavorites.addEventListener('click', () => setActiveCategory('favorites'));
 
     // Category search
