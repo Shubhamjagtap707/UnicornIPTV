@@ -134,26 +134,42 @@ function renderCategories() {
     const filterText = groupSearchInput.value.toLowerCase();
     const filteredGroups = state.groups.filter(g => g.name.toLowerCase().includes(filterText));
     
-    if (filteredGroups.length === 0) {
+    // Add "All Categories" button to reset the group filter
+    const totalCount = state.groups.reduce((acc, g) => acc + g.count, 0);
+    const isAllActive = state.activeCategory === null;
+    let html = `
+        <button class="category-btn ${isAllActive ? 'active' : ''}" data-group="all-categories">
+            <span>All Categories</span>
+            <span class="cat-count">${totalCount}</span>
+        </button>
+    `;
+
+    if (filteredGroups.length > 0) {
+        html += filteredGroups.map(group => {
+            const isActive = state.activeCategory === group.name;
+            return `
+                <button class="category-btn ${isActive ? 'active' : ''}" data-group="${group.name}">
+                    <span>${escapeHtml(group.name)}</span>
+                    <span class="cat-count">${group.count}</span>
+                </button>
+            `;
+        }).join('');
+    } else if (html === '') {
         categoriesContainer.innerHTML = '<div class="category-btn" style="pointer-events: none; opacity: 0.5;">No groups found</div>';
         return;
     }
 
-    categoriesContainer.innerHTML = filteredGroups.map(group => {
-        const isActive = state.activeCategory === group.name;
-        return `
-            <button class="category-btn ${isActive ? 'active' : ''}" data-group="${group.name}">
-                <span>${escapeHtml(group.name)}</span>
-                <span class="cat-count">${group.count}</span>
-            </button>
-        `;
-    }).join('');
+    categoriesContainer.innerHTML = html;
 
-    // Attach click listeners to new category buttons
+    // Attach click listeners to category buttons
     categoriesContainer.querySelectorAll('.category-btn').forEach(btn => {
         btn.addEventListener('click', () => {
             const groupName = btn.dataset.group;
-            setActiveCategory(groupName);
+            if (groupName === 'all-categories') {
+                setActiveCategory(null);
+            } else {
+                setActiveCategory(groupName);
+            }
         });
     });
 }
@@ -806,8 +822,24 @@ function initCustomPlayer() {
         }
     };
 
-    videoWrapper.addEventListener('mousemove', showControls);
-    videoPlayer.addEventListener('play', showControls);
+    // Show controls strictly on OK/Enter (remote) or touch/click on video screen
+    videoWrapper.addEventListener('click', (e) => {
+        // Ignore clicks on active controls panels
+        if (e.target.closest('.video-controls-container') || e.target.closest('.now-playing-bar') || e.target.closest('#player-settings-popup')) {
+            return;
+        }
+
+        if (!videoWrapper.classList.contains('show-controls')) {
+            e.stopPropagation();
+            videoWrapper.classList.add('show-controls');
+            videoWrapper.classList.remove('hide-cursor');
+            focusedZone = 'controls';
+            focusedIndex = 0;
+            updateSpatialFocusIndicator();
+            showControls();
+        }
+    });
+
     videoPlayer.addEventListener('pause', () => {
         videoWrapper.classList.add('show-controls');
         videoWrapper.classList.remove('hide-cursor');
@@ -970,13 +1002,16 @@ function getFocusables(zone) {
         case 'sidebar':
             const sidebarPanel = document.getElementById('sidebar-panel');
             if (sidebarPanel && sidebarPanel.classList.contains('view-categories')) {
-                // In categories view, focus category buttons
-                return Array.from(document.querySelectorAll('.category-list .category-btn'));
+                // In categories view, focus group-search filter and category buttons
+                const catSearch = document.getElementById('group-search');
+                const catItems = Array.from(document.querySelectorAll('.category-list .category-btn'));
+                return catSearch ? [catSearch, ...catItems] : catItems;
             } else {
-                // In channels view, focus menu items and channel cards
+                // In channels view, focus channel-search, menu items, and channel cards
+                const chanSearch = document.getElementById('channel-search');
                 const menuItems = Array.from(document.querySelectorAll('.sidebar-menu .menu-item'));
                 const channelItems = Array.from(document.querySelectorAll('#channel-grid-container .channel-card'));
-                return [...menuItems, ...channelItems];
+                return chanSearch ? [chanSearch, ...menuItems, ...channelItems] : [...menuItems, ...channelItems];
             }
         case 'controls':
             // If quality settings popup is open, only return the settings options!
@@ -1041,9 +1076,9 @@ function handleSpatialNavigation(key) {
         // In fullscreen zapping, allow ArrowUp/Down/Right to zap channels (not Left)
         if (document.fullscreenElement || document.webkitFullscreenElement) {
             if (key === 'ArrowUp') {
-                zapChannel(-1);
-            } else if (key === 'ArrowDown' || key === 'ArrowRight') {
                 zapChannel(1);
+            } else if (key === 'ArrowDown' || key === 'ArrowRight') {
+                zapChannel(-1);
             }
             return;
         }
@@ -1088,6 +1123,9 @@ function handleSpatialNavigation(key) {
         }
     } 
     else if (key === 'ArrowDown') {
+        if (document.activeElement && document.activeElement.tagName === 'INPUT') {
+            document.activeElement.blur();
+        }
         if (index < items.length - 1) {
             focusedIndex = index + 1;
         }
@@ -1176,6 +1214,16 @@ function updateSpatialFocusIndicator() {
         activeEl.classList.add('tv-focus');
         activeEl.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
 
+        // Auto-focus inputs for typing support
+        if (activeEl.tagName === 'INPUT') {
+            activeEl.focus();
+        } else {
+            // Blur currently active input to exit input mode cleanly
+            if (document.activeElement && document.activeElement.tagName === 'INPUT') {
+                document.activeElement.blur();
+            }
+        }
+
         // Automated Infinite load on remote/D-pad navigation:
         if (focusedZone === 'sidebar' && activeEl.classList.contains('channel-card')) {
             const allChannelCards = Array.from(document.querySelectorAll('#channel-grid-container .channel-card'));
@@ -1215,8 +1263,10 @@ document.addEventListener('keydown', (e) => {
     const navKeys = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Enter', 'Escape', 'Backspace'];
     
     if (navKeys.includes(e.key)) {
-        // Don't intercept when typing in search inputs
-        if (document.activeElement.tagName === 'INPUT') return;
+        // Allow ArrowDown, Escape, and Enter to navigate/blur when focused on input
+        if (document.activeElement && document.activeElement.tagName === 'INPUT') {
+            if (e.key !== 'ArrowDown' && e.key !== 'Escape' && e.key !== 'Enter') return;
+        }
         
         e.preventDefault();
         window.usingKeyboardNav = true;

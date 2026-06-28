@@ -1403,3 +1403,8 @@ body {
         width: 100vw;
     }
 }
+
+/* Remove fullscreen button from the controls overlay */
+#ctrl-fullscreen {
+    display: none !important;
+}
