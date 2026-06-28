@@ -597,6 +597,19 @@ function playChannel(channel) {
                     }
                     videoPlayer.play().catch(e => handlePlayError(e));
                 });
+                state.hlsInstance.on(Hls.Events.LEVEL_SWITCHED, (event, data) => {
+                    if (state.selectedQualityLevel === -1) {
+                        const autoBtn = qualityOptionsList.querySelector('.option-item[data-level="-1"]');
+                        if (autoBtn) {
+                            const currentIdx = data.level;
+                            if (state.hlsInstance.levels[currentIdx]) {
+                                const lvl = state.hlsInstance.levels[currentIdx];
+                                const res = lvl.height ? `${lvl.height}p` : `Level ${currentIdx}`;
+                                autoBtn.innerHTML = `<span>Auto (${res})</span>`;
+                            }
+                        }
+                    }
+                });
                 state.hlsInstance.on(Hls.Events.ERROR, (event, data) => {
                     if (data.fatal) {
                         switch (data.type) {
@@ -914,9 +927,20 @@ function populateQualityLevels() {
     qualityOptionsList.innerHTML = '';
     
     // Auto Option
+    let autoLabel = 'Auto';
+    if (state.selectedQualityLevel === -1 && state.hlsInstance && state.hlsInstance.currentLevel !== -1) {
+        const currentIdx = state.hlsInstance.currentLevel;
+        if (state.hlsInstance.levels[currentIdx]) {
+            const lvl = state.hlsInstance.levels[currentIdx];
+            const res = lvl.height ? `${lvl.height}p` : `Level ${currentIdx}`;
+            autoLabel = `Auto (${res})`;
+        }
+    }
+
     const autoBtn = document.createElement('button');
     autoBtn.className = `option-item ${state.selectedQualityLevel === -1 ? 'active' : ''}`;
-    autoBtn.innerHTML = '<span>Auto</span>';
+    autoBtn.setAttribute('data-level', '-1');
+    autoBtn.innerHTML = `<span>${autoLabel}</span>`;
     autoBtn.addEventListener('click', () => setHlsQuality(-1));
     qualityOptionsList.appendChild(autoBtn);
 
@@ -932,6 +956,7 @@ function populateQualityLevels() {
             }
             const btn = document.createElement('button');
             btn.className = `option-item ${state.selectedQualityLevel === idx ? 'active' : ''}`;
+            btn.setAttribute('data-level', idx);
             btn.innerHTML = `<span>${label}</span>`;
             btn.addEventListener('click', () => setHlsQuality(idx));
             qualityOptionsList.appendChild(btn);
@@ -949,9 +974,9 @@ function setHlsQuality(levelIndex) {
     
     // Update active dropdown item checkboxes
     const items = qualityOptionsList.querySelectorAll('.option-item');
-    items.forEach((item, idx) => {
-        const targetIdx = idx - 1; // Subtract 1 for Auto
-        if (targetIdx === levelIndex) {
+    items.forEach((item) => {
+        const val = parseInt(item.getAttribute('data-level'), 10);
+        if (val === levelIndex) {
             item.classList.add('active');
         } else {
             item.classList.remove('active');
