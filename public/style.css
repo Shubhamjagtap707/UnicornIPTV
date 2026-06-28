@@ -1404,7 +1404,8 @@ body {
     }
 }
 
-/* Remove fullscreen button from the controls overlay */
-#ctrl-fullscreen {
+/* Remove fullscreen and volume buttons from the controls overlay */
+#ctrl-fullscreen,
+.volume-container {
     display: none !important;
 }
