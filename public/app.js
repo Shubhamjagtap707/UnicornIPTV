@@ -81,6 +81,7 @@ document.addEventListener('DOMContentLoaded', () => {
     loadFavorites();
     fetchCategories();
     switchSidebarView('channels');
+    syncSidebarVisibility();
     loadChannels(1, false);
     setupEventListeners();
 });
@@ -169,6 +170,18 @@ function switchSidebarView(view) {
         sidebar.classList.remove('view-channels');
         sidebar.classList.add('view-categories');
         renderCategories(); // ensure list is populated/rendered
+    }
+}
+
+// Sync sidebar open/close class based on active focus zone
+function syncSidebarVisibility() {
+    const sidebar = document.getElementById('sidebar-panel');
+    if (!sidebar) return;
+    
+    if (focusedZone === 'sidebar') {
+        sidebar.classList.add('open');
+    } else {
+        sidebar.classList.remove('open');
     }
 }
 
@@ -483,6 +496,13 @@ function playChannel(channel) {
     videoPlayer.onplaying = () => {
         clearOverlay();
         ctrlPlayPause.innerHTML = "<i class='bx bx-pause'></i>";
+        
+        // Hide sidebar and clear controls overlay for clean fullscreen playback
+        focusedZone = 'controls'; // loses sidebar focus -> sidebar slides out
+        videoWrapper.classList.remove('show-controls');
+        videoWrapper.classList.add('hide-cursor');
+        
+        updateSpatialFocusIndicator();
     };
     
     videoPlayer.onerror = (e) => handlePlayError(e);
@@ -1116,6 +1136,7 @@ function handleSpatialNavigation(key) {
 
 // Apply Neon focus layout indicators
 function updateSpatialFocusIndicator() {
+    syncSidebarVisibility();
     document.querySelectorAll('.tv-focus').forEach(el => el.classList.remove('tv-focus'));
     
     let items = getFocusables(focusedZone);

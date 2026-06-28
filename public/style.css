@@ -79,15 +79,26 @@ body {
    SIDEBAR — Contains everything: logo, search, menu, categories, channels
    ========================================================================= */
 .sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
     width: 320px;
-    min-width: 320px;
-    background-color: var(--bg-sidebar);
-    border-right: 1px solid var(--border-glass);
+    height: 100vh;
+    z-index: 100;
+    background-color: rgba(11, 13, 22, 0.85);
+    backdrop-filter: blur(25px) saturate(180%);
+    -webkit-backdrop-filter: blur(25px) saturate(180%);
+    border-right: 1px solid var(--border-glass-bright);
     display: flex;
     flex-direction: column;
-    flex-shrink: 0;
-    height: 100vh;
     overflow: hidden;
+    transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+    transform: translateX(-100%); /* hidden offscreen by default */
+    box-shadow: 10px 0 40px rgba(0, 0, 0, 0.8);
+}
+
+.sidebar.open {
+    transform: translateX(0); /* slide in when open */
 }
 
 /* Sidebar View toggles */
@@ -588,12 +599,29 @@ body {
    MAIN CONTENT — FULL HEIGHT VIDEO PLAYER
    ========================================================================= */
 .main-content {
-    flex-grow: 1;
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
     height: 100vh;
+    z-index: 1;
+    overflow: hidden;
     background: #000;
+}
+
+/* Dim video background slightly when sidebar is open */
+.sidebar.open ~ .main-content::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.45);
+    pointer-events: none;
+    z-index: 2;
+    transition: opacity 0.3s ease;
+    opacity: 1;
 }
 
 .player-fullarea {
@@ -1363,18 +1391,15 @@ body {
    ========================================================================= */
 @media (max-width: 768px) {
     .sidebar {
-        width: 100%;
-        min-width: 100%;
-        height: 50vh;
-        border-right: none;
-        border-bottom: 1px solid var(--border-glass);
-    }
-
-    .app-container {
-        flex-direction: column;
+        width: 280px;
+        min-width: 280px;
+        height: 100vh;
+        border-right: 1px solid var(--border-glass-bright);
+        border-bottom: none;
     }
 
     .main-content {
-        height: 50vh;
+        height: 100vh;
+        width: 100vw;
     }
 }
