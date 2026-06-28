@@ -752,6 +752,12 @@ body {
     border-color: rgba(255, 71, 126, 0.3);
 }
 
+.control-btn.active#now-playing-fav-btn {
+    background: rgba(255, 71, 126, 0.15) !important;
+    color: var(--favorite) !important;
+    border-color: rgba(255, 71, 126, 0.3) !important;
+}
+
 /* =========================================================================
    PLAYER OVERLAYS — Welcome / Loader / Error
    ========================================================================= */
