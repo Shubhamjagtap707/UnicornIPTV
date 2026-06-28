@@ -1020,6 +1020,7 @@ function getFocusables(zone) {
             }
             return [
                 ctrlPlayPause,
+                nowPlayingFavBtn,
                 ctrlVolume,
                 ctrlVolumeSlider,
                 ctrlDataSaver,
@@ -1100,6 +1101,7 @@ function handleSpatialNavigation(key) {
             // Re-focus settings gear button
             const mainControls = [
                 ctrlPlayPause,
+                nowPlayingFavBtn,
                 ctrlVolume,
                 ctrlVolumeSlider,
                 ctrlDataSaver,
@@ -1259,6 +1261,9 @@ function updateEpgGuide(channel) {
 }
 
 // Keyboard D-Pad and Enter key bindings
+window.enterKeyDownTime = null;
+window.isLongPressTriggered = false;
+
 document.addEventListener('keydown', (e) => {
     const navKeys = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Enter', 'Escape', 'Backspace'];
     
@@ -1270,7 +1275,64 @@ document.addEventListener('keydown', (e) => {
         
         e.preventDefault();
         window.usingKeyboardNav = true;
-        handleSpatialNavigation(e.key);
+        
+        if (e.key === 'Enter') {
+            // Start long press detection for Enter
+            if (!window.enterKeyDownTime) {
+                window.enterKeyDownTime = Date.now();
+                window.isLongPressTriggered = false;
+                
+                window.enterLongPressTimeout = setTimeout(() => {
+                    if (focusedZone === 'sidebar') {
+                        const items = getFocusables('sidebar');
+                        const activeEl = items[focusedIndex];
+                        if (activeEl && activeEl.classList.contains('channel-card')) {
+                            window.isLongPressTriggered = true;
+                            const id = activeEl.dataset.id;
+                            toggleFavorite(id);
+                            
+                            const btn = activeEl.querySelector('.card-fav-btn');
+                            const icon = activeEl.querySelector('.card-fav-btn i');
+                            if (state.favorites.has(id)) {
+                                if (btn) btn.classList.add('active');
+                                if (icon) icon.className = 'bx bxs-heart';
+                                showActionNotification('Added to Favorites');
+                            } else {
+                                if (btn) btn.classList.remove('active');
+                                if (icon) icon.className = 'bx bx-heart';
+                                showActionNotification('Removed from Favorites');
+                            }
+                        }
+                    }
+                }, 600); // 600ms long press threshold
+            }
+        } else {
+            handleSpatialNavigation(e.key);
+        }
+    }
+});
+
+document.addEventListener('keyup', (e) => {
+    if (e.key === 'Enter') {
+        if (window.enterLongPressTimeout) clearTimeout(window.enterLongPressTimeout);
+        
+        let wasLongPress = false;
+        if (window.enterKeyDownTime) {
+            const pressDuration = Date.now() - window.enterKeyDownTime;
+            window.enterKeyDownTime = null;
+            if (window.isLongPressTriggered) {
+                wasLongPress = true;
+                window.isLongPressTriggered = false;
+            }
+        }
+        
+        if (wasLongPress) return;
+        
+        // Short press Enter -> standard activation action
+        if (document.activeElement && document.activeElement.tagName === 'INPUT') return;
+        
+        e.preventDefault();
+        handleSpatialNavigation('Enter');
     }
 });
 
