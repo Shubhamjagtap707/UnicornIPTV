@@ -916,16 +916,23 @@ function populateQualityLevels() {
     // Auto Option
     const autoBtn = document.createElement('button');
     autoBtn.className = `option-item ${state.selectedQualityLevel === -1 ? 'active' : ''}`;
-    autoBtn.textContent = 'Auto';
+    autoBtn.innerHTML = '<span>Auto</span>';
     autoBtn.addEventListener('click', () => setHlsQuality(-1));
     qualityOptionsList.appendChild(autoBtn);
 
     if (state.hlsInstance && state.hlsInstance.levels.length > 0) {
         state.hlsInstance.levels.forEach((level, idx) => {
-            const res = level.height ? `${level.height}p` : `Level ${idx}`;
+            let label = level.height ? `${level.height}p` : `Level ${idx}`;
+            if (level.height) {
+                if (level.height >= 2160) label = `${level.height}p (4K UHD)`;
+                else if (level.height >= 1440) label = `${level.height}p (2K)`;
+                else if (level.height >= 1080) label = `${level.height}p (FHD)`;
+                else if (level.height >= 720) label = `${level.height}p (HD)`;
+                else label = `${level.height}p (SD)`;
+            }
             const btn = document.createElement('button');
             btn.className = `option-item ${state.selectedQualityLevel === idx ? 'active' : ''}`;
-            btn.textContent = res;
+            btn.innerHTML = `<span>${label}</span>`;
             btn.addEventListener('click', () => setHlsQuality(idx));
             qualityOptionsList.appendChild(btn);
         });
