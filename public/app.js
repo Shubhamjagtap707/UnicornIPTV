@@ -755,19 +755,37 @@ function initCustomPlayer() {
 
     // 5. Fullscreen Toggle
     const toggleFullscreen = () => {
-        if (!document.fullscreenElement) {
-            videoWrapper.requestFullscreen().catch(err => {
-                console.error(`Fullscreen request failed: ${err.message}`);
-            });
-            ctrlFullscreen.innerHTML = "<i class='bx bx-exit-fullscreen'></i>";
+        if (!document.fullscreenElement && !document.webkitFullscreenElement) {
+            const req = document.documentElement.requestFullscreen || document.documentElement.webkitRequestFullscreen;
+            if (req) {
+                req.call(document.documentElement).catch(err => {
+                    console.error(`Fullscreen request failed: ${err.message}`);
+                });
+            }
         } else {
-            document.exitFullscreen();
-            ctrlFullscreen.innerHTML = "<i class='bx bx-fullscreen'></i>";
+            const exit = document.exitFullscreen || document.webkitExitFullscreen;
+            if (exit) exit.call(document);
         }
     };
 
     ctrlFullscreen.addEventListener('click', toggleFullscreen);
     videoPlayer.addEventListener('dblclick', toggleFullscreen);
+
+    // Sync fullscreen status on native escape/exit
+    document.addEventListener('fullscreenchange', () => {
+        if (document.fullscreenElement) {
+            ctrlFullscreen.innerHTML = "<i class='bx bx-exit-fullscreen'></i>";
+        } else {
+            ctrlFullscreen.innerHTML = "<i class='bx bx-fullscreen'></i>";
+        }
+    });
+    document.addEventListener('webkitfullscreenchange', () => {
+        if (document.webkitFullscreenElement) {
+            ctrlFullscreen.innerHTML = "<i class='bx bx-exit-fullscreen'></i>";
+        } else {
+            ctrlFullscreen.innerHTML = "<i class='bx bx-fullscreen'></i>";
+        }
+    });
 
     // 6. YouTube TV Auto-hide Controls UI on Inactivity
     const showControls = () => {
@@ -987,12 +1005,6 @@ function handleSpatialNavigation(key) {
     // A. Clean Playback Mode Key Intercepts (nothing over the video player)
     if (isPlayerClean && focusedZone !== 'sidebar') {
         if (key === 'ArrowLeft') {
-            // Exit fullscreen if active so user can see sidebar
-            if (document.fullscreenElement || document.webkitFullscreenElement) {
-                if (document.exitFullscreen) document.exitFullscreen();
-                else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
-            }
-            
             const now = Date.now();
             const timeDiff = now - lastLeftKeyPressTime;
             lastLeftKeyPressTime = now;
@@ -1026,9 +1038,9 @@ function handleSpatialNavigation(key) {
             return;
         }
         
-        // In fullscreen zapping, allow ArrowUp/Down/Left/Right to zap channels
+        // In fullscreen zapping, allow ArrowUp/Down/Right to zap channels (not Left)
         if (document.fullscreenElement || document.webkitFullscreenElement) {
-            if (key === 'ArrowUp' || key === 'ArrowLeft') {
+            if (key === 'ArrowUp') {
                 zapChannel(-1);
             } else if (key === 'ArrowDown' || key === 'ArrowRight') {
                 zapChannel(1);
@@ -1120,15 +1132,29 @@ function handleSpatialNavigation(key) {
         }
     }
     else if (key === 'Escape' || key === 'Backspace') {
-        // Close settings popup if open
+        // 1. Close settings popup if open
         if (playerSettingsPopup && playerSettingsPopup.classList.contains('active')) {
             playerSettingsPopup.classList.remove('active');
+            return;
         }
-        // Move focus back to sidebar
-        focusedZone = 'sidebar';
-        focusedIndex = 0;
-        // Hide player controls overlay
-        videoWrapper.classList.remove('show-controls');
+        // 2. Close sidebar if open (switch focus to controls/clean player)
+        if (focusedZone === 'sidebar') {
+            focusedZone = 'controls';
+            focusedIndex = 0;
+            videoWrapper.classList.remove('show-controls');
+            updateSpatialFocusIndicator();
+            return;
+        }
+        // 3. Hide player controls overlay if shown
+        if (videoWrapper.classList.contains('show-controls')) {
+            videoWrapper.classList.remove('show-controls');
+            return;
+        }
+        // 4. Exit fullscreen if in fullscreen
+        if (document.fullscreenElement || document.webkitFullscreenElement) {
+            const exit = document.exitFullscreen || document.webkitExitFullscreen;
+            if (exit) exit.call(document);
+        }
     }
 
     updateSpatialFocusIndicator();
