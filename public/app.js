@@ -822,6 +822,8 @@ function initCustomPlayer() {
         }
     };
 
+    window.showControls = showControls;
+
     // Show controls strictly on OK/Enter (remote) or touch/click on video screen
     videoWrapper.addEventListener('click', (e) => {
         // Ignore clicks on active controls panels
@@ -1071,14 +1073,15 @@ function handleSpatialNavigation(key) {
             focusedZone = 'controls';
             focusedIndex = 0;
             updateSpatialFocusIndicator();
+            if (window.showControls) window.showControls();
             return;
         }
         
-        // In fullscreen zapping, allow ArrowUp/Down/Right to zap channels (not Left)
+        // In fullscreen zapping, allow ArrowUp/Down to zap channels (not Left/Right)
         if (document.fullscreenElement || document.webkitFullscreenElement) {
             if (key === 'ArrowUp') {
                 zapChannel(1);
-            } else if (key === 'ArrowDown' || key === 'ArrowRight') {
+            } else if (key === 'ArrowDown') {
                 zapChannel(-1);
             }
             return;
@@ -1138,6 +1141,7 @@ function handleSpatialNavigation(key) {
             videoWrapper.classList.add('show-controls');
             focusedZone = 'controls';
             focusedIndex = 0;
+            if (window.showControls) window.showControls();
         } else if (focusedZone === 'controls') {
             // Navigate strictly inside player controls (wrapping)
             if (index < items.length - 1) {
