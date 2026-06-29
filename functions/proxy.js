@@ -14,7 +14,7 @@ export async function onRequest(context) {
     });
   }
 
-  const currentUrl = new URL(request.url);
+  const requestUrl = new URL(request.url);
 
   // Extract raw target URL
   const urlPrefix = '/proxy?url=';
@@ -24,7 +24,7 @@ export async function onRequest(context) {
   if (urlIndex !== -1) {
     targetUrl = decodeURIComponent(request.url.slice(urlIndex + urlPrefix.length));
   } else {
-    targetUrl = currentUrl.searchParams.get('url');
+    targetUrl = requestUrl.searchParams.get('url');
   }
 
   if (!targetUrl) {
@@ -187,7 +187,7 @@ export async function onRequest(context) {
       if (text.startsWith('#EXTM3U') || text.includes('#EXT-X-')) {
         newHeaders.set('Content-Type', 'application/x-mpegURL');
         const lines = text.split(/\r?\n/);
-        const proxyUrlBase = `${currentUrl.protocol}//${currentUrl.host}/proxy?url=`;
+        const proxyUrlBase = `${requestUrl.protocol}//${requestUrl.host}/proxy?url=`;
 
         const rewrittenLines = lines.map(line => {
           const trimmed = line.trim();
@@ -231,7 +231,7 @@ export async function onRequest(context) {
     // If DASH MPD XML, parse and rewrite all elements
     else if (contentType.includes('dash+xml') || lowerUrl.includes('.mpd') || lowerUrl.includes('mpd.php')) {
       const text = await response.text();
-      const proxyUrlBase = `${currentUrl.protocol}//${currentUrl.host}/proxy?url=`;
+      const proxyUrlBase = `${requestUrl.protocol}//${requestUrl.host}/proxy?url=`;
 
       let xmlBaseUrl = finalResponseUrl;
       const baseUrlMatch = text.match(/<BaseURL([^>]*)>([^<]+)<\/BaseURL>/i);
