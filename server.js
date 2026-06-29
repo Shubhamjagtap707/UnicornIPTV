@@ -265,11 +265,10 @@ app.get('/proxy', async (req, res) => {
     headers['Range'] = req.headers.range;
   }
 
-  let finalResponseUrl = actualTargetUrl;
-  let redirectChain = [];
-  let response = null;
+    // Log target URL and headers
+    console.log(`[UPSTREAM FETCH START] Target URL: ${actualTargetUrl}`);
+    console.log('[OUTGOING HEADERS]:', JSON.stringify(headers));
 
-  try {
     // Execute manual redirect following to capture the redirect chain and control headers
     let currentUrl = actualTargetUrl;
     let hops = 0;
@@ -289,6 +288,9 @@ app.get('/proxy', async (req, res) => {
         headers: hopHeaders,
         redirect: 'manual'
       });
+
+      console.log(`[HOP ${hops}] Status: ${response.status} URL: ${currentUrl}`);
+      console.log(`[HOP ${hops} HEADERS]:`, JSON.stringify(Object.fromEntries(response.headers.entries())));
 
       if (response.status >= 300 && response.status < 400) {
         const location = response.headers.get('location');
@@ -336,7 +338,7 @@ app.get('/proxy', async (req, res) => {
       res.setHeader('Content-Length', contentLength);
     }
 
-    // Read a non-destructive 200-byte snippet for structured logging
+    // Read a non-destructive 500-byte snippet for structured logging
     let bodySnippet = '';
     if (response.body) {
       try {
@@ -344,7 +346,7 @@ app.get('/proxy', async (req, res) => {
         const reader = clone.body.getReader();
         const { value } = await reader.read();
         if (value) {
-          const bytes = value.slice(0, 200);
+          const bytes = value.slice(0, 500);
           bodySnippet = new TextDecoder('utf-8', { fatal: false }).decode(bytes);
         }
         reader.releaseLock();
@@ -357,18 +359,16 @@ app.get('/proxy', async (req, res) => {
     // Perform the detailed request logging
     const executionTimeMs = (performance.now() - startTime).toFixed(2);
     const logData = {
-      requestId: Math.random().toString(36).substring(2),
       targetUrl: actualTargetUrl,
-      finalUrl: finalResponseUrl,
-      status: response.status,
-      executionTimeMs,
-      redirectChain,
-      contentType,
-      contentLength: contentLength || 'unknown',
+      outgoingHeaders: headers,
+      responseStatus: response.status,
       responseHeaders: Object.fromEntries(response.headers.entries()),
-      bodySnippet
+      bodySnippet500: bodySnippet,
+      redirectChain: redirectChain,
+      executionTimeMs,
+      originType: response.headers.get('server') || 'unknown'
     };
-    console.log('NODE_PROXY_LOG:', JSON.stringify(logData));
+    console.log('UPSTREAM_INVESTIGATION_LOG:', JSON.stringify(logData, null, 2));
 
     // If it's an HLS manifest, we must parse and rewrite absolute and relative URLs
     if (isM3U8 && !lowerUrl.includes('.ts')) {

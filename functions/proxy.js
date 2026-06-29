@@ -2,7 +2,7 @@ export async function onRequest(context) {
   const startTime = performance.now();
   const { request } = context;
 
-  // Handle preflight OPTIONS requests
+  // Handle OPTIONS
   if (request.method === 'OPTIONS') {
     return new Response(null, {
       headers: {
@@ -16,7 +16,7 @@ export async function onRequest(context) {
 
   const currentUrl = new URL(request.url);
 
-  // Extract the raw target URL parameter, preserving internal parameters
+  // Extract raw target URL
   const urlPrefix = '/proxy?url=';
   const urlIndex = request.url.indexOf(urlPrefix);
   let targetUrl = '';
@@ -31,7 +31,7 @@ export async function onRequest(context) {
     return new Response('Missing url parameter', { status: 400 });
   }
 
-  // Parse header parameters specified with pipe notation (e.g., URL|User-Agent=...&Referer=...)
+  // Parse header parameters specified with pipe notation
   let actualTargetUrl = targetUrl;
   const customHeaders = {};
   let pipeString = '';
@@ -71,99 +71,50 @@ export async function onRequest(context) {
   }
 
   let finalResponseUrl = actualTargetUrl;
-  let redirectChain = [];
+  const redirectChain = [];
   let response = null;
-  let usedFallback = false;
-  let fallbackReason = '';
 
-  const isKnownBlocked = actualTargetUrl.toLowerCase().includes('ksr.indevs.in') || 
-                         actualTargetUrl.toLowerCase().includes('servertvhub.site') ||
-                         actualTargetUrl.toLowerCase().includes('zee5');
-
-  const executeFetch = async (target) => {
-    let currentUrl = target;
+  try {
+    let currentUrl = actualTargetUrl;
     let hops = 0;
     const maxRedirects = 10;
-    const chain = [];
-    let resp = null;
+
+    // Log the target URL and outgoing request headers
+    console.log(`[UPSTREAM FETCH START] Target URL: ${actualTargetUrl}`);
+    console.log('[OUTGOING HEADERS]:', JSON.stringify(Object.fromEntries(headers.entries())));
 
     while (hops <= maxRedirects) {
-      chain.push(currentUrl);
+      redirectChain.push(currentUrl);
 
       const hopHeaders = new Headers(headers);
       if (hops > 0) {
-        hopHeaders.set('Referer', chain[hops - 1]);
+        hopHeaders.set('Referer', redirectChain[hops - 1]);
       }
 
-      resp = await fetch(currentUrl, {
+      response = await fetch(currentUrl, {
         method: 'GET',
         headers: hopHeaders,
         redirect: 'manual'
       });
 
-      if (resp.status >= 300 && resp.status < 400) {
-        const location = resp.headers.get('location');
+      console.log(`[HOP ${hops}] Status: ${response.status} URL: ${currentUrl}`);
+      console.log(`[HOP ${hops} HEADERS]:`, JSON.stringify(Object.fromEntries(response.headers.entries())));
+
+      if (response.status >= 300 && response.status < 400) {
+        const location = response.headers.get('location');
         if (!location) {
-          break;
+          break; 
         }
         currentUrl = new URL(location, currentUrl).href;
         hops++;
       } else {
-        break;
+        break; 
       }
     }
 
-    return { resp, finalUrl: currentUrl, chain };
-  };
+    finalResponseUrl = currentUrl;
 
-  try {
-    // 1. Fetching logic block (with nested Render fallback support)
-    try {
-      if (isKnownBlocked) {
-        usedFallback = true;
-        fallbackReason = 'Known Cloudflare-blocked provider (ZEE5/KSR)';
-        const renderProxyUrl = `https://unicorniptv.onrender.com/proxy?url=${encodeURIComponent(targetUrl)}`;
-        const fallbackHeaders = new Headers();
-        if (range) fallbackHeaders.set('Range', range);
-        
-        response = await fetch(renderProxyUrl, { headers: fallbackHeaders });
-        finalResponseUrl = response.url || renderProxyUrl;
-        redirectChain = [actualTargetUrl, renderProxyUrl];
-      } else {
-        try {
-          const result = await executeFetch(actualTargetUrl);
-          response = result.resp;
-          finalResponseUrl = result.finalUrl;
-          redirectChain = result.chain;
-
-          if (response.status === 403 || response.status === 503 || response.status === 450) {
-            usedFallback = true;
-            fallbackReason = `Blocked status code: ${response.status}`;
-            const renderProxyUrl = `https://unicorniptv.onrender.com/proxy?url=${encodeURIComponent(targetUrl)}`;
-            const fallbackHeaders = new Headers();
-            if (range) fallbackHeaders.set('Range', range);
-            
-            response = await fetch(renderProxyUrl, { headers: fallbackHeaders });
-            finalResponseUrl = response.url || renderProxyUrl;
-            redirectChain.push(renderProxyUrl);
-          }
-        } catch (fetchErr) {
-          usedFallback = true;
-          fallbackReason = `Fetch error: ${fetchErr.message}`;
-          const renderProxyUrl = `https://unicorniptv.onrender.com/proxy?url=${encodeURIComponent(targetUrl)}`;
-          const fallbackHeaders = new Headers();
-          if (range) fallbackHeaders.set('Range', range);
-          
-          response = await fetch(renderProxyUrl, { headers: fallbackHeaders });
-          finalResponseUrl = response.url || renderProxyUrl;
-          redirectChain.push(renderProxyUrl);
-        }
-      }
-    } catch (fallbackErr) {
-      return new Response('Proxy error: both CF and Render failed. Fallback error: ' + fallbackErr.message, { status: 500 });
-    }
-
-    // 2. Create clean headers to avoid compression, length, and CORS conflicts
+    // Create clean headers to avoid compression, length, and CORS conflicts
     const newHeaders = new Headers();
     newHeaders.set('Access-Control-Allow-Origin', '*');
     newHeaders.set('Access-Control-Allow-Headers', '*');
@@ -197,7 +148,7 @@ export async function onRequest(context) {
       newHeaders.set('Content-Length', contentLength);
     }
 
-    // Read a non-destructive 200-byte snippet for structured logging
+    // Read a non-destructive 500-byte snippet for structured logging
     let bodySnippet = '';
     if (response.body) {
       try {
@@ -205,7 +156,7 @@ export async function onRequest(context) {
         const reader = clone.body.getReader();
         const { value } = await reader.read();
         if (value) {
-          const bytes = value.slice(0, 200);
+          const bytes = value.slice(0, 500);
           bodySnippet = new TextDecoder('utf-8', { fatal: false }).decode(bytes);
         }
         reader.releaseLock();
@@ -215,23 +166,19 @@ export async function onRequest(context) {
       }
     }
 
-    // Perform the detailed request logging
+    // Perform the detailed request logging as requested by user
     const executionTimeMs = (performance.now() - startTime).toFixed(2);
     const logData = {
-      requestId: crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2),
       targetUrl: actualTargetUrl,
-      finalUrl: finalResponseUrl,
-      status: response.status,
-      executionTimeMs,
-      usedFallback,
-      fallbackReason,
-      redirectChain,
-      contentType,
-      contentLength: contentLength || 'unknown',
+      outgoingHeaders: Object.fromEntries(headers.entries()),
+      responseStatus: response.status,
       responseHeaders: Object.fromEntries(response.headers.entries()),
-      bodySnippet
+      bodySnippet500: bodySnippet,
+      redirectChain: redirectChain,
+      executionTimeMs,
+      originType: response.headers.get('server') || 'unknown'
     };
-    console.log('CF_PROXY_LOG:', JSON.stringify(logData));
+    console.log('UPSTREAM_INVESTIGATION_LOG:', JSON.stringify(logData, null, 2));
 
     // If HLS Playlist, parse and rewrite all absolute/relative URLs
     if (isM3U8 && !lowerUrl.includes('.ts')) {
@@ -355,12 +302,13 @@ export async function onRequest(context) {
     const executionTimeMs = (performance.now() - startTime).toFixed(2);
     const logData = {
       targetUrl: actualTargetUrl,
-      status: 500,
-      executionTimeMs,
+      outgoingHeaders: Object.fromEntries(headers.entries()),
+      responseStatus: 500,
       error: err.message,
-      stack: err.stack
+      stack: err.stack,
+      executionTimeMs
     };
-    console.error('CF_PROXY_ERROR:', JSON.stringify(logData));
+    console.error('CF_PROXY_ERROR:', JSON.stringify(logData, null, 2));
     return new Response('Proxy error: ' + err.message, { status: 500 });
   }
 }
