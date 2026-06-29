@@ -70,6 +70,18 @@ export async function onRequest(context) {
     headers.set('Range', range);
   }
 
+  // Helper to map raw IP addresses to sslip.io hostnames to bypass Cloudflare Direct IP fetch blocks (Error 1003)
+  const mapIpToHost = (urlStr) => {
+    try {
+      const urlObj = new URL(urlStr);
+      if (/^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$/.test(urlObj.hostname)) {
+        urlObj.hostname = `${urlObj.hostname}.sslip.io`;
+        return urlObj.href;
+      }
+    } catch (e) {}
+    return urlStr;
+  };
+
   let finalResponseUrl = actualTargetUrl;
   const redirectChain = [];
   let response = null;
@@ -91,13 +103,19 @@ export async function onRequest(context) {
         hopHeaders.set('Referer', redirectChain[hops - 1]);
       }
 
-      response = await fetch(currentUrl, {
+      // Map IP hostname if needed
+      const mappedUrl = mapIpToHost(currentUrl);
+      if (mappedUrl !== currentUrl) {
+        console.log(`[IP REWRITE] Rewrote raw IP hop url to: ${mappedUrl}`);
+      }
+
+      response = await fetch(mappedUrl, {
         method: 'GET',
         headers: hopHeaders,
         redirect: 'manual'
       });
 
-      console.log(`[HOP ${hops}] Status: ${response.status} URL: ${currentUrl}`);
+      console.log(`[HOP ${hops}] Status: ${response.status} URL: ${currentUrl} Mapped: ${mappedUrl}`);
       console.log(`[HOP ${hops} HEADERS]:`, JSON.stringify(Object.fromEntries(response.headers.entries())));
 
       if (response.status >= 300 && response.status < 400) {
@@ -112,7 +130,7 @@ export async function onRequest(context) {
       }
     }
 
-    finalResponseUrl = currentUrl;
+    finalResponseUrl = mapIpToHost(currentUrl);
 
     // Create clean headers to avoid compression, length, and CORS conflicts
     const newHeaders = new Headers();
