@@ -453,6 +453,11 @@ function updateNowPlayingFavIcon() {
 
 // Cleanup existing video players
 function destroyPlayers() {
+    // Reset Playlist Refresh Manager timers/session
+    if (window.playlistRefreshManager) {
+        window.playlistRefreshManager.reset();
+    }
+
     // 1. Destroy HLS
     if (state.hlsInstance) {
         state.hlsInstance.destroy();
@@ -622,11 +627,33 @@ function playChannel(channel) {
         } 
         else { // HLS Default
             if (Hls.isSupported()) {
+                // Initialize the Playlist Refresh Manager for this channel session
+                if (window.playlistRefreshManager) {
+                    window.playlistRefreshManager.start(channel.url, playUrl);
+                }
+
+                // Custom loader that intercepts level/manifest fetches and replaces them on hot-swap
+                class ManagerPlaylistLoader extends Hls.DefaultConfig.loader {
+                    load(context, config, callbacks) {
+                        if (window.playlistRefreshManager) {
+                            if (context.type === 'manifest') {
+                                context.url = window.playlistRefreshManager.getSwappedMasterUrl(context.url);
+                            } else if (context.type === 'level' || context.type === 'playlist') {
+                                context.url = window.playlistRefreshManager.getSwappedLevelUrl(context.level, context.url);
+                            } else if (context.type === 'audioTrack') {
+                                context.url = window.playlistRefreshManager.getSwappedAudioUrl(context.id, context.url);
+                            }
+                        }
+                        super.load(context, config, callbacks);
+                    }
+                }
+
                 state.hlsInstance = new Hls({
                     enableWorker: true,
                     lowLatencyMode: true,
                     maxBufferLength: 8,
-                    maxMaxBufferLength: 15
+                    maxMaxBufferLength: 15,
+                    pLoader: ManagerPlaylistLoader
                 });
                 state.hlsInstance.loadSource(playUrl);
                 state.hlsInstance.attachMedia(videoPlayer);
@@ -690,6 +717,9 @@ function playChannel(channel) {
 
                     if (isTokenExpired) {
                         console.warn(`[TOKEN EXPIRATION] HLS Token Expiration Detected (${statusCode}) on ${data.details}. Initiating automatic stream recovery...`);
+                        if (window.playlistRefreshManager) {
+                            window.playlistRefreshManager.reportPlaybackFailure();
+                        }
                         triggerHLSRecovery();
                         return;
                     }

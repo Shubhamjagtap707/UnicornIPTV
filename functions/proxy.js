@@ -137,6 +137,8 @@ export async function onRequest(context) {
     newHeaders.set('Access-Control-Allow-Origin', '*');
     newHeaders.set('Access-Control-Allow-Headers', '*');
     newHeaders.set('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS');
+    newHeaders.set('Access-Control-Expose-Headers', 'X-Final-Url, Content-Range, Accept-Ranges, Content-Type, Content-Length');
+    newHeaders.set('X-Final-Url', finalResponseUrl);
 
     const contentType = response.headers.get('content-type') || '';
     if (contentType) newHeaders.set('Content-Type', contentType);

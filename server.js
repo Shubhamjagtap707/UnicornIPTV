@@ -309,9 +309,11 @@ app.get('/proxy', async (req, res) => {
     // Copy the response status and content headers
     res.status(response.status);
     
-    const contentType = response.headers.get('content-type') || '';
+     const contentType = response.headers.get('content-type') || '';
     res.setHeader('Content-Type', contentType);
     res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Expose-Headers', 'X-Final-Url, Content-Range, Accept-Ranges, Content-Type, Content-Length');
+    res.setHeader('X-Final-Url', finalResponseUrl);
     
     const contentRange = response.headers.get('content-range');
     if (contentRange) res.setHeader('Content-Range', contentRange);
