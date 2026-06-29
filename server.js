@@ -212,6 +212,7 @@ app.get('/api/channels', (req, res) => {
 
 // Proxy endpoint to bypass CORS and resolve absolute/relative URLs in HLS manifests
 app.get('/proxy', async (req, res) => {
+  const startTime = performance.now();
   const urlPrefix = '/proxy?url=';
   const targetUrlIndex = req.originalUrl.indexOf(urlPrefix);
   let targetUrl = '';
@@ -264,8 +265,44 @@ app.get('/proxy', async (req, res) => {
     headers['Range'] = req.headers.range;
   }
 
+  let finalResponseUrl = actualTargetUrl;
+  let redirectChain = [];
+  let response = null;
+
   try {
-    const response = await fetch(actualTargetUrl, { headers });
+    // Execute manual redirect following to capture the redirect chain and control headers
+    let currentUrl = actualTargetUrl;
+    let hops = 0;
+    const maxRedirects = 10;
+
+    while (hops <= maxRedirects) {
+      redirectChain.push(currentUrl);
+
+      // Clone original headers for this hop
+      const hopHeaders = { ...headers };
+      if (hops > 0) {
+        hopHeaders['Referer'] = redirectChain[hops - 1];
+      }
+
+      response = await fetch(currentUrl, {
+        method: 'GET',
+        headers: hopHeaders,
+        redirect: 'manual'
+      });
+
+      if (response.status >= 300 && response.status < 400) {
+        const location = response.headers.get('location');
+        if (!location) {
+          break; // Redirect without Location header, exit loop
+        }
+        currentUrl = new URL(location, currentUrl).href;
+        hops++;
+      } else {
+        break; // Non-redirect response, exit loop
+      }
+    }
+
+    finalResponseUrl = currentUrl;
     
     // Copy the response status and content headers
     res.status(response.status);
@@ -280,7 +317,9 @@ app.get('/proxy', async (req, res) => {
     const acceptRanges = response.headers.get('accept-ranges');
     if (acceptRanges) res.setHeader('Accept-Ranges', acceptRanges);
 
-    const finalResponseUrl = response.url || actualTargetUrl;
+    const cacheControl = response.headers.get('cache-control');
+    if (cacheControl) res.setHeader('Cache-Control', cacheControl);
+
     const lowerUrl = actualTargetUrl.toLowerCase();
     const isM3U8 = contentType.includes('mpegurl') || 
                    contentType.includes('mpegURL') || 
@@ -288,13 +327,58 @@ app.get('/proxy', async (req, res) => {
                    lowerUrl.includes('.php') || 
                    lowerUrl.includes('/m3u/');
 
+    // Keep Content-Length only for binary segments (not rewritten text manifests)
+    // and only if not compressed/decompressed
+    const isTextManifest = isM3U8 || contentType.includes('dash+xml') || lowerUrl.includes('.mpd');
+    const contentLength = response.headers.get('content-length');
+    const contentEncoding = response.headers.get('content-encoding');
+    if (contentLength && !isTextManifest && !contentEncoding) {
+      res.setHeader('Content-Length', contentLength);
+    }
+
+    // Read a non-destructive 200-byte snippet for structured logging
+    let bodySnippet = '';
+    if (response.body) {
+      try {
+        const clone = response.clone();
+        const reader = clone.body.getReader();
+        const { value } = await reader.read();
+        if (value) {
+          const bytes = value.slice(0, 200);
+          bodySnippet = new TextDecoder('utf-8', { fatal: false }).decode(bytes);
+        }
+        reader.releaseLock();
+        clone.body.cancel().catch(() => {});
+      } catch (e) {
+        bodySnippet = `[Snippet Read Error: ${e.message}]`;
+      }
+    }
+
+    // Perform the detailed request logging
+    const executionTimeMs = (performance.now() - startTime).toFixed(2);
+    const logData = {
+      requestId: Math.random().toString(36).substring(2),
+      targetUrl: actualTargetUrl,
+      finalUrl: finalResponseUrl,
+      status: response.status,
+      executionTimeMs,
+      redirectChain,
+      contentType,
+      contentLength: contentLength || 'unknown',
+      responseHeaders: Object.fromEntries(response.headers.entries()),
+      bodySnippet
+    };
+    console.log('NODE_PROXY_LOG:', JSON.stringify(logData));
+
     // If it's an HLS manifest, we must parse and rewrite absolute and relative URLs
     if (isM3U8 && !lowerUrl.includes('.ts')) {
       const text = await response.text();
       
       if (text.startsWith('#EXTM3U') || text.includes('#EXT-X-')) {
+        res.setHeader('Content-Type', 'application/x-mpegURL');
         const lines = text.split(/\r?\n/);
-        const proxyUrlBase = `${req.protocol}://${req.get('host')}/proxy?url=`;
+        const proto = req.headers['x-forwarded-proto'] || req.protocol;
+        const proxyUrlBase = `${proto}://${req.get('host')}/proxy?url=`;
         
         const rewrittenLines = lines.map(line => {
           const trimmed = line.trim();
@@ -336,7 +420,8 @@ app.get('/proxy', async (req, res) => {
       }
     } else if (contentType.includes('dash+xml') || lowerUrl.includes('.mpd') || lowerUrl.includes('mpd.php')) {
       const text = await response.text();
-      const proxyUrlBase = `${req.protocol}://${req.get('host')}/proxy?url=`;
+      const proto = req.headers['x-forwarded-proto'] || req.protocol;
+      const proxyUrlBase = `${proto}://${req.get('host')}/proxy?url=`;
       
       // 1. Determine the base URL for XML path resolution (handling any <BaseURL> elements)
       let xmlBaseUrl = finalResponseUrl;
@@ -423,7 +508,15 @@ app.get('/proxy', async (req, res) => {
       }
     }
   } catch (err) {
-    console.error('Proxy failed for URL:', actualTargetUrl, err.message);
+    const executionTimeMs = (performance.now() - startTime).toFixed(2);
+    const logData = {
+      targetUrl: actualTargetUrl,
+      status: 500,
+      executionTimeMs,
+      error: err.message,
+      stack: err.stack
+    };
+    console.error('NODE_PROXY_ERROR:', JSON.stringify(logData));
     res.status(500).send('Proxy error: ' + err.message);
   }
 });

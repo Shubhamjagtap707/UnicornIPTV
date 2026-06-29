@@ -5122,6 +5122,15 @@
       "url": "https://ksr.indevs.in/m3u/?stream=481526"
     },
     {
+      "id": "item-1796-o5p0",
+      "name": "24/7 SHINCHAN",
+      "tvgId": "481784",
+      "tvgName": "24/7 SHINCHAN",
+      "logo": "http://tv.max4k.us/stalker_portal/misc/logos/320/78131.jfif",
+      "group": "(KSR) HINDI | KIDS",
+      "url": "https://ksr.indevs.in/m3u/?stream=481784"
+    },
+    {
       "id": "item-1761-v1k6",
       "name": "24/7 OGGY AND THE COCKROACHES",
       "tvgId": "481527",
@@ -5435,24 +5444,6 @@
       "logo": "http://tv.max4k.us/stalker_portal/misc/logos/320/77908.png",
       "group": "(KSR) HINDI | KIDS",
       "url": "https://ksr.indevs.in/m3u/?stream=481552"
-    },
-    {
-      "id": "item-1796-o5p0",
-      "name": "24/7 SHINCHAN",
-      "tvgId": "481784",
-      "tvgName": "24/7 SHINCHAN",
-      "logo": "http://tv.max4k.us/stalker_portal/misc/logos/320/78131.jfif",
-      "group": "(KSR) HINDI | KIDS",
-      "url": "https://ksr.indevs.in/m3u/?stream=481784"
-    },
-    {
-      "id": "item-1797-wh3o",
-      "name": "YASH RAJ FILM MUSIC",
-      "tvgId": "480513",
-      "tvgName": "YASH RAJ FILM MUSIC",
-      "logo": "http://tv.max4k.us/stalker_portal/misc/logos/320/76875.png",
-      "group": "(KSR) HINDI | MUSIC",
-      "url": "https://ksr.indevs.in/m3u/?stream=480513"
     },
     {
       "id": "item-1798-3z8y",

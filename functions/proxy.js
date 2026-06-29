@@ -1,4 +1,5 @@
 export async function onRequest(context) {
+  const startTime = performance.now();
   const { request } = context;
 
   // Handle preflight OPTIONS requests
@@ -69,8 +70,44 @@ export async function onRequest(context) {
     headers.set('Range', range);
   }
 
+  let finalResponseUrl = actualTargetUrl;
+  let redirectChain = [];
+  let response = null;
+
   try {
-    const response = await fetch(actualTargetUrl, { headers });
+    // Execute manual redirect following to capture the redirect chain and control headers
+    let currentUrl = actualTargetUrl;
+    let hops = 0;
+    const maxRedirects = 10;
+
+    while (hops <= maxRedirects) {
+      redirectChain.push(currentUrl);
+
+      // Clone original headers for this hop
+      const hopHeaders = new Headers(headers);
+      if (hops > 0) {
+        hopHeaders.set('Referer', redirectChain[hops - 1]);
+      }
+
+      response = await fetch(currentUrl, {
+        method: 'GET',
+        headers: hopHeaders,
+        redirect: 'manual'
+      });
+
+      if (response.status >= 300 && response.status < 400) {
+        const location = response.headers.get('location');
+        if (!location) {
+          break; // Redirect without Location header, exit loop
+        }
+        currentUrl = new URL(location, currentUrl).href;
+        hops++;
+      } else {
+        break; // Non-redirect response, exit loop
+      }
+    }
+
+    finalResponseUrl = currentUrl;
 
     // Create clean headers to avoid compression, length, and CORS conflicts
     const newHeaders = new Headers();
@@ -90,7 +127,6 @@ export async function onRequest(context) {
     const cacheControl = response.headers.get('cache-control');
     if (cacheControl) newHeaders.set('Cache-Control', cacheControl);
 
-    const finalResponseUrl = response.url || actualTargetUrl;
     const lowerUrl = actualTargetUrl.toLowerCase();
     const isM3U8 = contentType.includes('mpegurl') ||
       contentType.includes('mpegURL') ||
@@ -99,7 +135,7 @@ export async function onRequest(context) {
       lowerUrl.includes('/m3u/');
 
     // Keep Content-Length only for binary segments (not rewritten text manifests)
-    // and only if not compressed/decompressed (since Cloudflare fetch decompresses automatically)
+    // and only if not compressed/decompressed
     const isTextManifest = isM3U8 || contentType.includes('dash+xml') || lowerUrl.includes('.mpd');
     const contentLength = response.headers.get('content-length');
     const contentEncoding = response.headers.get('content-encoding');
@@ -107,11 +143,46 @@ export async function onRequest(context) {
       newHeaders.set('Content-Length', contentLength);
     }
 
+    // Read a non-destructive 200-byte snippet for structured logging
+    let bodySnippet = '';
+    if (response.body) {
+      try {
+        const clone = response.clone();
+        const reader = clone.body.getReader();
+        const { value } = await reader.read();
+        if (value) {
+          const bytes = value.slice(0, 200);
+          bodySnippet = new TextDecoder('utf-8', { fatal: false }).decode(bytes);
+        }
+        reader.releaseLock();
+        clone.body.cancel().catch(() => {});
+      } catch (e) {
+        bodySnippet = `[Snippet Read Error: ${e.message}]`;
+      }
+    }
+
+    // Perform the detailed request logging
+    const executionTimeMs = (performance.now() - startTime).toFixed(2);
+    const logData = {
+      requestId: crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2),
+      targetUrl: actualTargetUrl,
+      finalUrl: finalResponseUrl,
+      status: response.status,
+      executionTimeMs,
+      redirectChain,
+      contentType,
+      contentLength: contentLength || 'unknown',
+      responseHeaders: Object.fromEntries(response.headers.entries()),
+      bodySnippet
+    };
+    console.log('CF_PROXY_LOG:', JSON.stringify(logData));
+
     // If HLS Playlist, parse and rewrite all absolute/relative URLs
     if (isM3U8 && !lowerUrl.includes('.ts')) {
       const text = await response.text();
 
       if (text.startsWith('#EXTM3U') || text.includes('#EXT-X-')) {
+        newHeaders.set('Content-Type', 'application/x-mpegURL');
         const lines = text.split(/\r?\n/);
         const proxyUrlBase = `${currentUrl.protocol}//${currentUrl.host}/proxy?url=`;
 
@@ -225,6 +296,15 @@ export async function onRequest(context) {
       });
     }
   } catch (err) {
+    const executionTimeMs = (performance.now() - startTime).toFixed(2);
+    const logData = {
+      targetUrl: actualTargetUrl,
+      status: 500,
+      executionTimeMs,
+      error: err.message,
+      stack: err.stack
+    };
+    console.error('CF_PROXY_ERROR:', JSON.stringify(logData));
     return new Response('Proxy error: ' + err.message, { status: 500 });
   }
 }
