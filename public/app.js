@@ -259,11 +259,16 @@ function setActiveCategory(category) {
 
     // Fetch channels and set focus to the first channel card
     loadChannels(1, false).then(() => {
-        // Focus first channel card
+        // Focus first channel card and ensure sidebar remains open
         focusedZone = 'sidebar';
         const items = getFocusables('sidebar');
         const firstChanIdx = items.findIndex(el => el.classList.contains('channel-card'));
         focusedIndex = firstChanIdx !== -1 ? firstChanIdx : 0;
+        
+        // Force sidebar state to stay open during transition
+        const sidebar = document.getElementById('sidebar-panel');
+        if (sidebar) sidebar.classList.add('open');
+        
         updateSpatialFocusIndicator();
     });
 }
@@ -900,8 +905,8 @@ function initCustomPlayer() {
         // Hide only if playing
         if (!videoPlayer.paused) {
             state.controlsTimeout = setTimeout(() => {
-                // If settings modal is open, don't auto-hide
-                if (playerSettingsPopup.classList.contains('active')) return;
+                // If settings modal is open, or sidebar is open, do NOT auto-hide controls
+                if (playerSettingsPopup.classList.contains('active') || focusedZone === 'sidebar') return;
                 
                 videoWrapper.classList.remove('show-controls');
                 videoWrapper.classList.add('hide-cursor');
@@ -1016,6 +1021,10 @@ function setHlsQuality(levelIndex) {
     });
 
     playerSettingsPopup.classList.remove('active');
+    
+    // Maintain controls visibility
+    videoWrapper.classList.add('show-controls');
+    if (window.showControls) window.showControls();
 }
 
 // Force the lowest quality level for Data Saver Mode
