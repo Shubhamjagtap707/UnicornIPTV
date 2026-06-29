@@ -492,6 +492,12 @@ function getStreamEngine(url) {
 
 // Play Selected Channel
 function playChannel(channel) {
+    // Clear recovery flags if this is a manual change to a different channel
+    if (!state.isRecovering || (state.currentChannel && state.currentChannel.id !== channel.id)) {
+        state.isRecovering = false;
+        state.recoveryAudioTrackName = null;
+        state.recoveryAudioTrackLang = null;
+    }
     state.currentChannel = channel;
     
     // Highlight active card
@@ -558,6 +564,7 @@ function playChannel(channel) {
         } else {
             // All retries failed, show permanent error layout
             state.retryCount = 0; // reset for future manual/automatic clicks
+            state.isRecovering = false; // reset recovery guard
             nowPlayingTitle.textContent = channel.name; // Restore clean name
             playerLoader.style.display = 'none';
             playerError.style.display = 'flex';
@@ -573,6 +580,7 @@ function playChannel(channel) {
     videoPlayer.onplaying = () => {
         clearOverlay();
         ctrlPlayPause.innerHTML = "<i class='bx bx-pause'></i>";
+        state.isRecovering = false; // reset recovery guard
         
         // Hide sidebar and clear controls overlay for clean fullscreen playback ONLY if user is not actively navigating the sidebar
         if (focusedZone !== 'sidebar') {
@@ -622,14 +630,45 @@ function playChannel(channel) {
                 });
                 state.hlsInstance.loadSource(playUrl);
                 state.hlsInstance.attachMedia(videoPlayer);
-                state.hlsInstance.on(Hls.Events.MANIFEST_PARSED, () => {
+                 state.hlsInstance.on(Hls.Events.MANIFEST_PARSED, () => {
                     populateQualityLevels();
                     if (state.dataSaverMode) {
                         applyDataSaverQuality();
                     } else if (state.selectedQualityLevel !== -1) {
                         setHlsQuality(state.selectedQualityLevel);
                     }
-                    videoPlayer.play().catch(e => handlePlayError(e));
+
+                    // Restore saved audio track if any from recovery state
+                    if (state.recoveryAudioTrackName || state.recoveryAudioTrackLang) {
+                        const tracks = state.hlsInstance.audioTracks;
+                        let matchedIdx = -1;
+                        if (state.recoveryAudioTrackName) {
+                            matchedIdx = tracks.findIndex(t => t.name === state.recoveryAudioTrackName);
+                        }
+                        if (matchedIdx === -1 && state.recoveryAudioTrackLang) {
+                            matchedIdx = tracks.findIndex(t => t.lang === state.recoveryAudioTrackLang);
+                        }
+                        if (matchedIdx !== -1) {
+                            console.log(`[RECOVERY] Restoring audio track to index ${matchedIdx} (Name: ${tracks[matchedIdx].name})`);
+                            state.hlsInstance.audioTrack = matchedIdx;
+                        }
+                        // Clear fields so we don't apply it again on quality switch
+                        state.recoveryAudioTrackName = null;
+                        state.recoveryAudioTrackLang = null;
+                    }
+
+                    if (state.isRecovering) {
+                        const newPlayUrl = state.hlsInstance.url || playUrl;
+                        console.log(`[RECOVERY] New signed URL obtained: ${newPlayUrl}`);
+                        console.log(`[RECOVERY] Playback recovery success for channel: "${channel.name}"`);
+                    }
+
+                    videoPlayer.play().catch(e => {
+                        if (state.isRecovering) {
+                            console.error('[RECOVERY] Playback recovery failure:', e);
+                        }
+                        handlePlayError(e);
+                    });
                 });
                 state.hlsInstance.on(Hls.Events.LEVEL_SWITCHED, (event, data) => {
                     if (state.selectedQualityLevel === -1) {
@@ -645,6 +684,16 @@ function playChannel(channel) {
                     }
                 });
                 state.hlsInstance.on(Hls.Events.ERROR, (event, data) => {
+                    // Check if request failed because of token expiration (401 or 403 response)
+                    const statusCode = data.response ? data.response.code : 0;
+                    const isTokenExpired = statusCode === 401 || statusCode === 403;
+
+                    if (isTokenExpired) {
+                        console.warn(`[TOKEN EXPIRATION] HLS Token Expiration Detected (${statusCode}) on ${data.details}. Initiating automatic stream recovery...`);
+                        triggerHLSRecovery();
+                        return;
+                    }
+
                     if (data.fatal) {
                         switch (data.type) {
                             case Hls.ErrorTypes.NETWORK_ERROR:
@@ -675,6 +724,64 @@ function playChannel(channel) {
         }
     } catch (e) {
         handlePlayError(e.message || e);
+    }
+}
+
+// Automatic stream recovery for HLS token expiration
+function triggerHLSRecovery() {
+    if (!state.currentChannel) return;
+    if (state.isRecovering) {
+        console.log('[RECOVERY] Recovery already in progress, ignoring duplicate trigger.');
+        return;
+    }
+    state.isRecovering = true;
+    console.log(`[RECOVERY] Token expiration detected! Automatic playlist refresh initiated for channel: "${state.currentChannel.name}"`);
+
+    // Save current user/player states to restore
+    const savedVolume = videoPlayer.volume;
+    const savedMuted = videoPlayer.muted;
+    const isFullscreen = !!(document.fullscreenElement || document.webkitFullscreenElement || document.mozFullScreenElement || document.msFullscreenElement);
+    
+    let savedAudioTrackName = null;
+    let savedAudioTrackLang = null;
+    if (state.hlsInstance) {
+        const currentTrackIdx = state.hlsInstance.audioTrack;
+        const currentTrack = state.hlsInstance.audioTracks[currentTrackIdx];
+        if (currentTrack) {
+            savedAudioTrackName = currentTrack.name;
+            savedAudioTrackLang = currentTrack.lang;
+            console.log(`[RECOVERY] Saved audio track: name="${savedAudioTrackName}", lang="${savedAudioTrackLang}"`);
+        }
+    }
+
+    const channelToReload = state.currentChannel;
+    const oldPlayUrl = (state.hlsInstance && state.hlsInstance.url) || nowPlayingUrl.textContent;
+    console.log(`[RECOVERY] Old signed URL: ${oldPlayUrl}`);
+    console.log(`[RECOVERY] Re-fetching original playlist URL: ${channelToReload.url}`);
+
+    // Clean up current players
+    destroyPlayers();
+
+    // Set recovery target fields in state so they are restored on load
+    state.recoveryAudioTrackName = savedAudioTrackName;
+    state.recoveryAudioTrackLang = savedAudioTrackLang;
+
+    // Reload channel immediately (will request a fresh signed URL through /proxy)
+    playChannel(channelToReload);
+
+    // Re-apply saved states
+    videoPlayer.volume = savedVolume;
+    videoPlayer.muted = savedMuted;
+
+    if (isFullscreen && !document.fullscreenElement) {
+        const videoWrapper = document.getElementById('videoWrapper') || videoPlayer.parentElement;
+        if (videoWrapper) {
+            if (videoWrapper.requestFullscreen) {
+                videoWrapper.requestFullscreen().catch(e => console.error('[RECOVERY] Failed to restore fullscreen:', e));
+            } else if (videoWrapper.webkitRequestFullscreen) {
+                videoWrapper.webkitRequestFullscreen();
+            }
+        }
     }
 }
 
