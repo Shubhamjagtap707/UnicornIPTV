@@ -642,17 +642,21 @@ function playChannel(channel) {
                     if (data.fatal) {
                         switch (data.type) {
                             case Hls.ErrorTypes.NETWORK_ERROR:
-                                console.warn('HLS Network Error, attempting recovery...');
+                                console.warn('HLS Fatal Network Error, attempting HLS recovery...');
                                 state.hlsInstance.startLoad();
                                 break;
                             case Hls.ErrorTypes.MEDIA_ERROR:
-                                console.warn('HLS Media Error, attempting recovery...');
+                                console.warn('HLS Fatal Media Error, attempting HLS recovery...');
                                 state.hlsInstance.recoverMediaError();
                                 break;
                             default:
+                                console.error('HLS Unrecoverable Error:', data.details);
                                 handlePlayError(data.details);
                                 break;
                         }
+                    } else {
+                        // Log non-fatal errors but do NOT trigger a channel reload
+                        console.warn('HLS Non-fatal Error:', data.details || data.type);
                     }
                 });
             } else if (videoPlayer.canPlayType('application/vnd.apple.mpegurl')) {
