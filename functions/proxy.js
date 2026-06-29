@@ -73,41 +73,96 @@ export async function onRequest(context) {
   let finalResponseUrl = actualTargetUrl;
   let redirectChain = [];
   let response = null;
+  let usedFallback = false;
+  let fallbackReason = '';
 
-  try {
-    // Execute manual redirect following to capture the redirect chain and control headers
-    let currentUrl = actualTargetUrl;
+  const isKnownBlocked = actualTargetUrl.toLowerCase().includes('ksr.indevs.in') || 
+                         actualTargetUrl.toLowerCase().includes('servertvhub.site') ||
+                         actualTargetUrl.toLowerCase().includes('zee5');
+
+  const executeFetch = async (target) => {
+    let currentUrl = target;
     let hops = 0;
     const maxRedirects = 10;
+    const chain = [];
+    let resp = null;
 
     while (hops <= maxRedirects) {
-      redirectChain.push(currentUrl);
+      chain.push(currentUrl);
 
-      // Clone original headers for this hop
       const hopHeaders = new Headers(headers);
       if (hops > 0) {
-        hopHeaders.set('Referer', redirectChain[hops - 1]);
+        hopHeaders.set('Referer', chain[hops - 1]);
       }
 
-      response = await fetch(currentUrl, {
+      resp = await fetch(currentUrl, {
         method: 'GET',
         headers: hopHeaders,
         redirect: 'manual'
       });
 
-      if (response.status >= 300 && response.status < 400) {
-        const location = response.headers.get('location');
+      if (resp.status >= 300 && resp.status < 400) {
+        const location = resp.headers.get('location');
         if (!location) {
-          break; // Redirect without Location header, exit loop
+          break;
         }
         currentUrl = new URL(location, currentUrl).href;
         hops++;
       } else {
-        break; // Non-redirect response, exit loop
+        break;
       }
     }
 
-    finalResponseUrl = currentUrl;
+    return { resp, finalUrl: currentUrl, chain };
+  };
+
+  try {
+    if (isKnownBlocked) {
+      usedFallback = true;
+      fallbackReason = 'Known Cloudflare-blocked provider (ZEE5/KSR)';
+      const renderProxyUrl = `https://unicorniptv.onrender.com/proxy?url=${encodeURIComponent(targetUrl)}`;
+      const fallbackHeaders = new Headers();
+      if (range) fallbackHeaders.set('Range', range);
+      
+      response = await fetch(renderProxyUrl, { headers: fallbackHeaders });
+      finalResponseUrl = response.url || renderProxyUrl;
+      redirectChain = [actualTargetUrl, renderProxyUrl];
+    } else {
+      // Cloudflare first
+      const result = await executeFetch(actualTargetUrl);
+      response = result.resp;
+      finalResponseUrl = result.finalUrl;
+      redirectChain = result.chain;
+
+      // Render fallback on failure/blocked response
+      if (response.status === 403 || response.status === 503 || response.status === 450) {
+        usedFallback = true;
+        fallbackReason = `Blocked status code: ${response.status}`;
+        const renderProxyUrl = `https://unicorniptv.onrender.com/proxy?url=${encodeURIComponent(targetUrl)}`;
+        const fallbackHeaders = new Headers();
+        if (range) fallbackHeaders.set('Range', range);
+        
+        response = await fetch(renderProxyUrl, { headers: fallbackHeaders });
+        finalResponseUrl = response.url || renderProxyUrl;
+        redirectChain.push(renderProxyUrl);
+      }
+    }
+  } catch (err) {
+    // Attempt Render fallback on network failure
+    try {
+      usedFallback = true;
+      fallbackReason = `Fetch error: ${err.message}`;
+      const renderProxyUrl = `https://unicorniptv.onrender.com/proxy?url=${encodeURIComponent(targetUrl)}`;
+      const fallbackHeaders = new Headers();
+      if (range) fallbackHeaders.set('Range', range);
+      
+      response = await fetch(renderProxyUrl, { headers: fallbackHeaders });
+      finalResponseUrl = response.url || renderProxyUrl;
+      redirectChain.push(renderProxyUrl);
+    } catch (fallbackErr) {
+      return new Response('Proxy error: both CF and Render failed. Original: ' + err.message + ' Fallback: ' + fallbackErr.message, { status: 500 });
+    }
+  }
 
     // Create clean headers to avoid compression, length, and CORS conflicts
     const newHeaders = new Headers();
@@ -169,6 +224,8 @@ export async function onRequest(context) {
       finalUrl: finalResponseUrl,
       status: response.status,
       executionTimeMs,
+      usedFallback,
+      fallbackReason,
       redirectChain,
       contentType,
       contentLength: contentLength || 'unknown',
