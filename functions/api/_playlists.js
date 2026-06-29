@@ -1,5 +1,6 @@
 import ksrPlaylist from '../../Channels/KSR Playlist.json';
-import phpopPlaylist from '../../Channels/playlist.phpop.json';
+import zee5Playlist from '../../Channels/ZEE5.json';
+import sonylivPlaylist from '../../Channels/SonyLiv.json';
 
 let cachedData = null;
 
@@ -57,20 +58,32 @@ export function getPlaylistData() {
     ksrChannels = arrayKey ? ksrPlaylist[arrayKey] : [ksrPlaylist];
   }
 
-  // Normalize phpop Playlist
-  let phpopChannels = [];
-  if (phpopPlaylist && Array.isArray(phpopPlaylist)) {
-    phpopChannels = phpopPlaylist;
-  } else if (phpopPlaylist && phpopPlaylist.items && Array.isArray(phpopPlaylist.items)) {
-    phpopChannels = phpopPlaylist.items;
-  } else if (phpopPlaylist && typeof phpopPlaylist === 'object') {
-    const arrayKey = Object.keys(phpopPlaylist).find(k => Array.isArray(phpopPlaylist[k]));
-    phpopChannels = arrayKey ? phpopPlaylist[arrayKey] : [phpopPlaylist];
+  // Normalize ZEE5 Playlist
+  let zee5Channels = [];
+  if (zee5Playlist && Array.isArray(zee5Playlist)) {
+    zee5Channels = zee5Playlist;
+  } else if (zee5Playlist && zee5Playlist.items && Array.isArray(zee5Playlist.items)) {
+    zee5Channels = zee5Playlist.items;
+  } else if (zee5Playlist && typeof zee5Playlist === 'object') {
+    const arrayKey = Object.keys(zee5Playlist).find(k => Array.isArray(zee5Playlist[k]));
+    zee5Channels = arrayKey ? zee5Playlist[arrayKey] : [zee5Playlist];
+  }
+
+  // Normalize SonyLiv Playlist
+  let sonylivChannels = [];
+  if (sonylivPlaylist && Array.isArray(sonylivPlaylist)) {
+    sonylivChannels = sonylivPlaylist;
+  } else if (sonylivPlaylist && sonylivPlaylist.items && Array.isArray(sonylivPlaylist.items)) {
+    sonylivChannels = sonylivPlaylist.items;
+  } else if (sonylivPlaylist && typeof sonylivPlaylist === 'object') {
+    const arrayKey = Object.keys(sonylivPlaylist).find(k => Array.isArray(sonylivPlaylist[k]));
+    sonylivChannels = arrayKey ? sonylivPlaylist[arrayKey] : [sonylivPlaylist];
   }
 
   const channels = [
     ...processPlaylist(ksrChannels, 'KSR Playlist.json'),
-    ...processPlaylist(phpopChannels, 'playlist.phpop.json')
+    ...processPlaylist(zee5Channels, 'ZEE5.json'),
+    ...processPlaylist(sonylivChannels, 'SonyLiv.json')
   ];
 
   // Extract unique groups and count channels per group

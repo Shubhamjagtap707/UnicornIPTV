@@ -72,20 +72,40 @@ export async function onRequest(context) {
   try {
     const response = await fetch(actualTargetUrl, { headers });
 
-    // Copy original response headers and enforce CORS
-    const newHeaders = new Headers(response.headers);
+    // Create clean headers to avoid compression, length, and CORS conflicts
+    const newHeaders = new Headers();
     newHeaders.set('Access-Control-Allow-Origin', '*');
     newHeaders.set('Access-Control-Allow-Headers', '*');
     newHeaders.set('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS');
 
     const contentType = response.headers.get('content-type') || '';
+    if (contentType) newHeaders.set('Content-Type', contentType);
+
+    const contentRange = response.headers.get('content-range');
+    if (contentRange) newHeaders.set('Content-Range', contentRange);
+
+    const acceptRanges = response.headers.get('accept-ranges');
+    if (acceptRanges) newHeaders.set('Accept-Ranges', acceptRanges);
+
+    const cacheControl = response.headers.get('cache-control');
+    if (cacheControl) newHeaders.set('Cache-Control', cacheControl);
+
     const finalResponseUrl = response.url || actualTargetUrl;
     const lowerUrl = actualTargetUrl.toLowerCase();
     const isM3U8 = contentType.includes('mpegurl') ||
-                   contentType.includes('mpegURL') ||
-                   lowerUrl.includes('.m3u8') ||
-                   lowerUrl.includes('.php') ||
-                   lowerUrl.includes('/m3u/');
+      contentType.includes('mpegURL') ||
+      lowerUrl.includes('.m3u8') ||
+      lowerUrl.includes('.php') ||
+      lowerUrl.includes('/m3u/');
+
+    // Keep Content-Length only for binary segments (not rewritten text manifests)
+    // and only if not compressed/decompressed (since Cloudflare fetch decompresses automatically)
+    const isTextManifest = isM3U8 || contentType.includes('dash+xml') || lowerUrl.includes('.mpd');
+    const contentLength = response.headers.get('content-length');
+    const contentEncoding = response.headers.get('content-encoding');
+    if (contentLength && !isTextManifest && !contentEncoding) {
+      newHeaders.set('Content-Length', contentLength);
+    }
 
     // If HLS Playlist, parse and rewrite all absolute/relative URLs
     if (isM3U8 && !lowerUrl.includes('.ts')) {
@@ -107,7 +127,7 @@ export async function onRequest(context) {
                   if (!uri.startsWith('http://') && !uri.startsWith('https://')) {
                     absoluteUri = new URL(uri, finalResponseUrl).href;
                   }
-                } catch (e) {}
+                } catch (e) { }
                 return `URI="${proxyUrlBase}${encodeURIComponent(absoluteUri + pipeString)}"`;
               });
             }
@@ -119,7 +139,7 @@ export async function onRequest(context) {
             if (!trimmed.startsWith('http://') && !trimmed.startsWith('https://')) {
               absoluteUrl = new URL(trimmed, finalResponseUrl).href;
             }
-          } catch (e) {}
+          } catch (e) { }
           return proxyUrlBase + encodeURIComponent(absoluteUrl + pipeString);
         });
 
@@ -150,7 +170,7 @@ export async function onRequest(context) {
             resolvedUrlObj.search = baseUrlObj.search;
           }
           xmlBaseUrl = resolvedUrlObj.href;
-        } catch (e) {}
+        } catch (e) { }
       }
 
       let rewritten = text.replace(/(href|media|initialization|url|uri)="([^"]+)"/gi, (match, attr, val) => {
@@ -186,7 +206,7 @@ export async function onRequest(context) {
             }
             absoluteUrl = resolvedObj.href;
           }
-        } catch (e) {}
+        } catch (e) { }
         return `<Location${attrs}>${proxyUrlBase}${encodeURIComponent(absoluteUrl + pipeString)}<\/Location>`;
       });
 
