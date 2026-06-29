@@ -117,54 +117,53 @@ export async function onRequest(context) {
   };
 
   try {
-    if (isKnownBlocked) {
-      usedFallback = true;
-      fallbackReason = 'Known Cloudflare-blocked provider (ZEE5/KSR)';
-      const renderProxyUrl = `https://unicorniptv.onrender.com/proxy?url=${encodeURIComponent(targetUrl)}`;
-      const fallbackHeaders = new Headers();
-      if (range) fallbackHeaders.set('Range', range);
-      
-      response = await fetch(renderProxyUrl, { headers: fallbackHeaders });
-      finalResponseUrl = response.url || renderProxyUrl;
-      redirectChain = [actualTargetUrl, renderProxyUrl];
-    } else {
-      // Cloudflare first
-      const result = await executeFetch(actualTargetUrl);
-      response = result.resp;
-      finalResponseUrl = result.finalUrl;
-      redirectChain = result.chain;
-
-      // Render fallback on failure/blocked response
-      if (response.status === 403 || response.status === 503 || response.status === 450) {
+    // 1. Fetching logic block (with nested Render fallback support)
+    try {
+      if (isKnownBlocked) {
         usedFallback = true;
-        fallbackReason = `Blocked status code: ${response.status}`;
+        fallbackReason = 'Known Cloudflare-blocked provider (ZEE5/KSR)';
         const renderProxyUrl = `https://unicorniptv.onrender.com/proxy?url=${encodeURIComponent(targetUrl)}`;
         const fallbackHeaders = new Headers();
         if (range) fallbackHeaders.set('Range', range);
         
         response = await fetch(renderProxyUrl, { headers: fallbackHeaders });
         finalResponseUrl = response.url || renderProxyUrl;
-        redirectChain.push(renderProxyUrl);
-      }
-    }
-  } catch (err) {
-    // Attempt Render fallback on network failure
-    try {
-      usedFallback = true;
-      fallbackReason = `Fetch error: ${err.message}`;
-      const renderProxyUrl = `https://unicorniptv.onrender.com/proxy?url=${encodeURIComponent(targetUrl)}`;
-      const fallbackHeaders = new Headers();
-      if (range) fallbackHeaders.set('Range', range);
-      
-      response = await fetch(renderProxyUrl, { headers: fallbackHeaders });
-      finalResponseUrl = response.url || renderProxyUrl;
-      redirectChain.push(renderProxyUrl);
-    } catch (fallbackErr) {
-      return new Response('Proxy error: both CF and Render failed. Original: ' + err.message + ' Fallback: ' + fallbackErr.message, { status: 500 });
-    }
-  }
+        redirectChain = [actualTargetUrl, renderProxyUrl];
+      } else {
+        try {
+          const result = await executeFetch(actualTargetUrl);
+          response = result.resp;
+          finalResponseUrl = result.finalUrl;
+          redirectChain = result.chain;
 
-    // Create clean headers to avoid compression, length, and CORS conflicts
+          if (response.status === 403 || response.status === 503 || response.status === 450) {
+            usedFallback = true;
+            fallbackReason = `Blocked status code: ${response.status}`;
+            const renderProxyUrl = `https://unicorniptv.onrender.com/proxy?url=${encodeURIComponent(targetUrl)}`;
+            const fallbackHeaders = new Headers();
+            if (range) fallbackHeaders.set('Range', range);
+            
+            response = await fetch(renderProxyUrl, { headers: fallbackHeaders });
+            finalResponseUrl = response.url || renderProxyUrl;
+            redirectChain.push(renderProxyUrl);
+          }
+        } catch (fetchErr) {
+          usedFallback = true;
+          fallbackReason = `Fetch error: ${fetchErr.message}`;
+          const renderProxyUrl = `https://unicorniptv.onrender.com/proxy?url=${encodeURIComponent(targetUrl)}`;
+          const fallbackHeaders = new Headers();
+          if (range) fallbackHeaders.set('Range', range);
+          
+          response = await fetch(renderProxyUrl, { headers: fallbackHeaders });
+          finalResponseUrl = response.url || renderProxyUrl;
+          redirectChain.push(renderProxyUrl);
+        }
+      }
+    } catch (fallbackErr) {
+      return new Response('Proxy error: both CF and Render failed. Fallback error: ' + fallbackErr.message, { status: 500 });
+    }
+
+    // 2. Create clean headers to avoid compression, length, and CORS conflicts
     const newHeaders = new Headers();
     newHeaders.set('Access-Control-Allow-Origin', '*');
     newHeaders.set('Access-Control-Allow-Headers', '*');
