@@ -227,7 +227,8 @@ app.get('/proxy', async (req, res) => {
     return res.status(400).send('Missing url parameter');
   }
 
-  // Parse header parameters specified with pipe notation (e.g., URL|User-Agent=...&Referer=...)
+  try {
+    // Parse header parameters specified with pipe notation (e.g., URL|User-Agent=...&Referer=...)
   let actualTargetUrl = targetUrl;
   const customHeaders = {};
   let pipeString = '';
