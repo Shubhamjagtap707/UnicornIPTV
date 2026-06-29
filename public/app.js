@@ -574,12 +574,13 @@ function playChannel(channel) {
         clearOverlay();
         ctrlPlayPause.innerHTML = "<i class='bx bx-pause'></i>";
         
-        // Hide sidebar and clear controls overlay for clean fullscreen playback
-        focusedZone = 'controls'; // loses sidebar focus -> sidebar slides out
-        videoWrapper.classList.remove('show-controls');
-        videoWrapper.classList.add('hide-cursor');
-        
-        updateSpatialFocusIndicator();
+        // Hide sidebar and clear controls overlay for clean fullscreen playback ONLY if user is not actively navigating the sidebar
+        if (focusedZone !== 'sidebar') {
+            focusedZone = 'controls'; // loses sidebar focus -> sidebar slides out
+            videoWrapper.classList.remove('show-controls');
+            videoWrapper.classList.add('hide-cursor');
+            updateSpatialFocusIndicator();
+        }
     };
     
     videoPlayer.onerror = (e) => handlePlayError(e);
