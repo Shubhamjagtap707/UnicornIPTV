@@ -525,13 +525,41 @@ function playChannel(channel) {
         playerLoader.style.display = 'none';
     };
 
+    // Track retry attempts
+    if (!state.retryCount) state.retryCount = 0;
+    if (state.lastPlayedChannelId !== channel.id) {
+        state.retryCount = 0;
+        state.lastPlayedChannelId = channel.id;
+    }
+
     const handlePlayError = (err) => {
         console.error('Playback Error:', err);
-        playerLoader.style.display = 'none';
-        playerError.style.display = 'flex';
-        playerErrorMsg.textContent = `The ${engine} stream is unavailable, offline, or blocked.`;
-        playerOverlay.style.opacity = '1';
-        playerOverlay.style.pointerEvents = 'auto';
+        
+        const maxRetries = 3;
+        if (state.retryCount < maxRetries) {
+            state.retryCount++;
+            console.log(`Auto-retry attempt ${state.retryCount}/${maxRetries} for channel "${channel.name}" in 2 seconds...`);
+            playerLoader.style.display = 'flex';
+            playerError.style.display = 'none';
+            
+            // Show retry status message to user on overlay
+            nowPlayingTitle.textContent = `${channel.name} (Retrying ${state.retryCount}/${maxRetries}...)`;
+            
+            setTimeout(() => {
+                if (state.currentChannel && state.currentChannel.id === channel.id) {
+                    playChannel(channel);
+                }
+            }, 2000);
+        } else {
+            // All retries failed, show permanent error layout
+            state.retryCount = 0; // reset for future manual/automatic clicks
+            nowPlayingTitle.textContent = channel.name; // Restore clean name
+            playerLoader.style.display = 'none';
+            playerError.style.display = 'flex';
+            playerErrorMsg.textContent = `The ${engine} stream is unavailable, offline, or blocked.`;
+            playerOverlay.style.opacity = '1';
+            playerOverlay.style.pointerEvents = 'auto';
+        }
     };
 
     // Reset quality levels list UI
