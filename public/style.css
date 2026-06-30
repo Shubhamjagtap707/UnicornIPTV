@@ -1479,3 +1479,14 @@ body {
 .volume-container {
     display: none !important;
 }
+
+/* Mobile menu button: hidden on desktop/TV, visible on mobile only */
+#ctrl-menu {
+    display: none;
+}
+
+@media (max-width: 768px) {
+    #ctrl-menu {
+        display: flex;
+    }
+}

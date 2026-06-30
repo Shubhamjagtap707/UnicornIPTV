@@ -932,6 +932,23 @@ function initCustomPlayer() {
 
     ctrlPlayPause.addEventListener('click', togglePlay);
 
+    // Mobile Menu Button: opens sidebar channel list
+    const ctrlMenu = document.getElementById('ctrl-menu');
+    if (ctrlMenu) {
+        ctrlMenu.addEventListener('click', () => {
+            switchSidebarView('channels');
+            focusedZone = 'sidebar';
+            const items = getFocusables('sidebar');
+            const playingIdx = items.findIndex(el => el.classList.contains('channel-card') && el.classList.contains('playing'));
+            const firstChanIdx = items.findIndex(el => el.classList.contains('channel-card'));
+            focusedIndex = playingIdx !== -1 ? playingIdx : (firstChanIdx !== -1 ? firstChanIdx : 0);
+            updateSpatialFocusIndicator();
+            // Scroll focused card into view
+            const focusedEl = items[focusedIndex];
+            if (focusedEl) focusedEl.scrollIntoView({ block: 'nearest', behavior: 'auto' });
+        });
+    }
+
     // Flash Play/Pause Center Indicator
     const flashCenterBtn = (type) => {
         centerPlayBtn.innerHTML = type === 'play' ? "<i class='bx bx-play'></i>" : "<i class='bx bx-pause'></i>";
