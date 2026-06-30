@@ -1053,14 +1053,22 @@ function initCustomPlayer() {
 
     window.showControls = showControls;
 
-    // Show controls strictly on OK/Enter (remote) or touch/click on video screen
+    // Tap/click on the video area toggles the controls overlay.
+    // On mobile: first tap shows controls, second tap hides them.
+    // On desktop/TV: the existing auto-hide timeout still dismisses controls automatically.
     videoWrapper.addEventListener('click', (e) => {
-        // Ignore clicks on active controls panels
+        // Ignore clicks that land directly on control panels
         if (e.target.closest('.video-controls-container') || e.target.closest('.now-playing-bar') || e.target.closest('#player-settings-popup')) {
             return;
         }
 
-        if (!videoWrapper.classList.contains('show-controls')) {
+        if (videoWrapper.classList.contains('show-controls')) {
+            // Controls are visible → hide them on tap
+            videoWrapper.classList.remove('show-controls');
+            videoWrapper.classList.add('hide-cursor');
+            if (state.controlsTimeout) clearTimeout(state.controlsTimeout);
+        } else {
+            // Controls are hidden → show them on tap
             e.stopPropagation();
             videoWrapper.classList.add('show-controls');
             videoWrapper.classList.remove('hide-cursor');
