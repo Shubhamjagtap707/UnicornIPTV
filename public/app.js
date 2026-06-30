@@ -1470,7 +1470,7 @@ function updateSpatialFocusIndicator() {
     const activeEl = items[focusedIndex];
     if (activeEl) {
         activeEl.classList.add('tv-focus');
-        activeEl.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+        activeEl.scrollIntoView({ block: 'nearest', behavior: 'auto' });
 
         // Auto-focus inputs for typing support
         if (activeEl.tagName === 'INPUT') {
