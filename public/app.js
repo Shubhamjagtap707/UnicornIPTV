@@ -931,7 +931,6 @@ function initCustomPlayer() {
     };
 
     ctrlPlayPause.addEventListener('click', togglePlay);
-    videoPlayer.addEventListener('click', togglePlay);
 
     // Flash Play/Pause Center Indicator
     const flashCenterBtn = (type) => {
