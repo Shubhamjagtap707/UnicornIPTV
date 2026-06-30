@@ -21,7 +21,10 @@ let state = {
     hlsInstance: null,
     dashInstance: null,
     mpegtsInstance: null,
-    isLoadingChannels: false
+    isLoadingChannels: false,
+
+    // Debounce timer for playback initiation
+    playbackDebounceTimeout: null
 };
 
 // DOM Elements
@@ -504,8 +507,9 @@ function playChannel(channel) {
         state.recoveryAudioTrackLang = null;
     }
     state.currentChannel = channel;
-    
-    // Highlight active card
+
+    // --- Instant UI updates (no debounce) ---
+    // Highlight active card immediately so D-pad navigation feels snappy
     document.querySelectorAll('.channel-card').forEach(card => {
         if (card.dataset.id === channel.id) {
             card.classList.add('playing');
@@ -514,24 +518,36 @@ function playChannel(channel) {
         }
     });
 
-    // Update Stream Panel Info
+    // Update Stream Panel Info immediately
     nowPlayingTitle.textContent = channel.name;
     nowPlayingGroup.textContent = channel.group || 'General';
     nowPlayingUrl.textContent = channel.url;
     updateNowPlayingFavIcon();
     updateEpgGuide(channel);
 
-    // Reset video player container state
+    // Show loading state immediately
     playerWelcome.style.display = 'none';
     playerError.style.display = 'none';
     playerLoader.style.display = 'flex';
     playerOverlay.style.opacity = '1';
     playerOverlay.style.pointerEvents = 'auto';
 
-    destroyPlayers();
+    // --- 120ms debounce on playback initiation only ---
+    // Cancel any pending playback from a previously selected channel.
+    // Only the final selected channel (after 120ms of no new selections) will
+    // create HLS/DASH instances and issue network requests.
+    if (state.playbackDebounceTimeout) {
+        clearTimeout(state.playbackDebounceTimeout);
+    }
+    state.playbackDebounceTimeout = setTimeout(() => {
+        state.playbackDebounceTimeout = null;
+        // Guard: user may have switched to another channel while waiting
+        if (state.currentChannel !== channel) return;
 
-    const engine = getStreamEngine(channel.url);
-    nowPlayingEngine.textContent = engine;
+        destroyPlayers();
+
+        const engine = getStreamEngine(channel.url);
+        nowPlayingEngine.textContent = engine;
     console.log(`Playing channel "${channel.name}" using engine: ${engine}`);
 
     // Set up standard HTML5 media event hooks
@@ -755,6 +771,7 @@ function playChannel(channel) {
     } catch (e) {
         handlePlayError(e.message || e);
     }
+    }, 120); // 120ms debounce: only the final selected channel starts playback
 }
 
 // Automatic stream recovery for HLS token expiration
